@@ -23,6 +23,7 @@ RAMP_FILE = os.path.join(SCRIPT_DIR, "temperature_ramp.txt")
 GRIB_FILE = os.path.join(SCRIPT_DIR, "hrrr_tmp2m.grib2")
 TIFF_FILE = os.path.join(SCRIPT_DIR, "hrrr_tmp2m.tif")
 RGBA_FILE = os.path.join(SCRIPT_DIR, "hrrr_tmp2m_rgba.tif")
+MERC_FILE = os.path.join(SCRIPT_DIR, "hrrr_tmp2m_merc.tif")
 
 NOMADS_BASE = "https://nomads.ncep.noaa.gov/cgi-bin/filter_hrrr_2d.pl"
 
@@ -94,20 +95,32 @@ def main():
     # Download
     download(url, GRIB_FILE)
 
-    # Step 1: GRIB2 → GeoTIFF
+    # Step 1: GRIB2 → GeoTIFF (keeps native Lambert Conformal projection)
     run_cmd([
-        "gdal_translate", "-of", "GTiff", "-a_srs", "EPSG:4326",
+        "gdal_translate", "-of", "GTiff",
         GRIB_FILE, TIFF_FILE
     ], "GRIB2 → GeoTIFF")
 
-    # Step 2: Color relief → RGBA GeoTIFF
+    # Step 2: Reproject to Web Mercator (EPSG:3857), clip to ±85° lat
+    # HRRR uses Lambert Conformal Conic — gdal2tiles needs EPSG:3857 input
+    run_cmd([
+        "gdalwarp",
+        "-t_srs", "EPSG:3857",
+        "-te", "-20037508.34", "-20037508.34", "20037508.34", "20037508.34",
+        "-te_srs", "EPSG:3857",
+        "-r", "bilinear",
+        "-of", "GTiff",
+        TIFF_FILE, MERC_FILE
+    ], "Reproject → Web Mercator")
+
+    # Step 3: Color relief → RGBA GeoTIFF
     run_cmd([
         "gdaldem", "color-relief",
-        TIFF_FILE, RAMP_FILE, RGBA_FILE,
+        MERC_FILE, RAMP_FILE, RGBA_FILE,
         "-alpha", "-of", "GTiff"
     ], "Color relief → RGBA")
 
-    # Step 3: RGBA GeoTIFF → Slippy Map tiles (zoom 2-8)
+    # Step 4: RGBA GeoTIFF → Slippy Map tiles (zoom 2-8)
     if os.path.exists(OUTPUT_DIR):
         shutil.rmtree(OUTPUT_DIR)
     os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -141,7 +154,7 @@ def main():
     print(f"Wrote {meta_path}")
 
     # Cleanup intermediate files
-    for f in [GRIB_FILE, TIFF_FILE, RGBA_FILE]:
+    for f in [GRIB_FILE, TIFF_FILE, MERC_FILE, RGBA_FILE]:
         if os.path.exists(f):
             os.remove(f)
 
