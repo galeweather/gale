@@ -1041,23 +1041,46 @@
   ];
 
   function rgbToTempF(r, g, b) {
-    // Find closest ramp entry by color distance, interpolate Celsius, convert to F
-    let bestIdx = 0, bestDist = Infinity;
-    for (let i = 0; i < TEMP_RAMP.length; i++) {
-      const dr = r - TEMP_RAMP[i].r, dg = g - TEMP_RAMP[i].g, db = b - TEMP_RAMP[i].b;
-      const dist = dr*dr + dg*dg + db*db;
-      if (dist < bestDist) { bestDist = dist; bestIdx = i; }
+    // Reverse GDAL's linear RGB interpolation between adjacent ramp entries.
+    // For each segment, solve for t from each channel and check consistency.
+    let bestTemp = null, bestError = Infinity;
+
+    for (let i = 0; i < TEMP_RAMP.length - 1; i++) {
+      const a = TEMP_RAMP[i], n = TEMP_RAMP[i + 1];
+      const dr = n.r - a.r, dg = n.g - a.g, db = n.b - a.b;
+
+      // Compute t from each channel where there's meaningful change
+      const tVals = [];
+      if (Math.abs(dr) > 2) tVals.push((r - a.r) / dr);
+      if (Math.abs(dg) > 2) tVals.push((g - a.g) / dg);
+      if (Math.abs(db) > 2) tVals.push((b - a.b) / db);
+      if (tVals.length === 0) continue;
+
+      const avgT = tVals.reduce((s, v) => s + v, 0) / tVals.length;
+      const maxDev = Math.max(...tVals.map(t => Math.abs(t - avgT)));
+      if (avgT < -0.1 || avgT > 1.1 || maxDev > 0.2) continue;
+
+      const t = Math.max(0, Math.min(1, avgT));
+      const er = a.r + t * dr, eg = a.g + t * dg, eb = a.b + t * db;
+      const error = (r - er) ** 2 + (g - eg) ** 2 + (b - eb) ** 2;
+
+      if (error < bestError) {
+        bestError = error;
+        bestTemp = a.c + t * (n.c - a.c);
+      }
     }
-    // Interpolate between this entry and its neighbor
-    let tempC = TEMP_RAMP[bestIdx].c;
-    if (bestIdx < TEMP_RAMP.length - 1) {
-      const a = TEMP_RAMP[bestIdx], bn = TEMP_RAMP[bestIdx + 1];
-      const dToA = Math.sqrt((r-a.r)**2 + (g-a.g)**2 + (b-a.b)**2);
-      const dToB = Math.sqrt((r-bn.r)**2 + (g-bn.g)**2 + (b-bn.b)**2);
-      const total = dToA + dToB;
-      if (total > 0) tempC = a.c + (bn.c - a.c) * (dToA / total);
+
+    // Fallback: closest single entry
+    if (bestTemp === null) {
+      let bestIdx = 0, bestDist = Infinity;
+      for (let i = 0; i < TEMP_RAMP.length; i++) {
+        const d = (r - TEMP_RAMP[i].r) ** 2 + (g - TEMP_RAMP[i].g) ** 2 + (b - TEMP_RAMP[i].b) ** 2;
+        if (d < bestDist) { bestDist = d; bestIdx = i; }
+      }
+      bestTemp = TEMP_RAMP[bestIdx].c;
     }
-    return Math.round(tempC * 9/5 + 32);
+
+    return Math.round(bestTemp * 9 / 5 + 32);
   }
 
   // Tile pixel reading via offscreen canvas
@@ -1183,12 +1206,19 @@
       const meta = await resp.json();
       if (meta.hrrr_run && meta.hrrr_run !== lastTempRun) {
         lastTempRun = meta.hrrr_run;
+        // Clear pixel-sampling cache so labels read fresh tiles
+        Object.keys(tileCache).forEach(k => delete tileCache[k]);
         if (map.getSource('temperature')) {
           const ts = Date.now();
           map.getSource('temperature').setTiles([
             `${TILE_BASE}/temperature/{z}/{x}/{y}.png?_=${ts}`
           ]);
         }
+        // Refresh temp labels with new data
+        setTimeout(updateTempLabels, 1000);
+        // Show HRRR run time in freshness badge
+        document.getElementById('freshnessText').textContent =
+          `HRRR ${meta.hrrr_hour}Z · MRMS live`;
       }
     } catch (e) { /* R2 may not have tiles yet — ignore */ }
   }
