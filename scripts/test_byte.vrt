@@ -1,0 +1,37 @@
+<VRTDataset rasterXSize="1440" rasterYSize="721">
+  <SRS dataAxisToSRSAxisMapping="2,1">GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],AXIS["Latitude",NORTH],AXIS["Longitude",EAST],AUTHORITY["EPSG","4326"]]</SRS>
+  <GeoTransform> -1.8012500000000000e+02,  2.5000000000000000e-01,  0.0000000000000000e+00,  9.0125000000000000e+01,  0.0000000000000000e+00, -2.5000000000000000e-01</GeoTransform>
+  <Metadata>
+    <MDI key="AREA_OR_POINT">Area</MDI>
+  </Metadata>
+  <Metadata domain="IMAGE_STRUCTURE">
+    <MDI key="INTERLEAVE">BAND</MDI>
+  </Metadata>
+  <VRTRasterBand dataType="Byte" band="1" blockXSize="1440" blockYSize="1">
+    <Metadata>
+      <MDI key="GRIB_COMMENT">Temperature [C]</MDI>
+      <MDI key="GRIB_DISCIPLINE">0(Meteorological)</MDI>
+      <MDI key="GRIB_ELEMENT">TMP</MDI>
+      <MDI key="GRIB_FORECAST_SECONDS">0</MDI>
+      <MDI key="GRIB_IDS">CENTER=7(US-NCEP) SUBCENTER=0 MASTER_TABLE=2 LOCAL_TABLE=1 SIGNF_REF_TIME=1(Start_of_Forecast) REF_TIME=2026-02-16T00:00:00Z PROD_STATUS=0(Operational) TYPE=1(Forecast)</MDI>
+      <MDI key="GRIB_PDS_PDTN">0</MDI>
+      <MDI key="GRIB_PDS_TEMPLATE_ASSEMBLED_VALUES">0 0 2 0 81 0 0 1 0 103 0 2 255 0 0</MDI>
+      <MDI key="GRIB_PDS_TEMPLATE_NUMBERS">0 0 2 0 81 0 0 0 1 0 0 0 0 103 0 0 0 0 2 255 0 0 0 0 0</MDI>
+      <MDI key="GRIB_REF_TIME">1771200000</MDI>
+      <MDI key="GRIB_SHORT_NAME">2-HTGL</MDI>
+      <MDI key="GRIB_UNIT">[C]</MDI>
+      <MDI key="GRIB_VALID_TIME">1771200000</MDI>
+    </Metadata>
+    <Description>2[m] HTGL="Specified height level above ground"</Description>
+    <ColorInterp>Gray</ColorInterp>
+    <ComplexSource>
+      <SourceFilename relativeToVRT="1">test.tif</SourceFilename>
+      <SourceBand>1</SourceBand>
+      <SourceProperties RasterXSize="1440" RasterYSize="721" DataType="Float64" BlockXSize="1440" BlockYSize="1" />
+      <SrcRect xOff="0" yOff="0" xSize="1440" ySize="721" />
+      <DstRect xOff="0" yOff="0" xSize="1440" ySize="721" />
+      <ScaleOffset>-392.308</ScaleOffset>
+      <ScaleRatio>1.96154</ScaleRatio>
+    </ComplexSource>
+  </VRTRasterBand>
+</VRTDataset>

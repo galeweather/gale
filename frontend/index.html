@@ -1,0 +1,1123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Gale — Open Weather Visualization</title>
+<meta name="description" content="Free, open-source weather visualization for the United States. Radar, satellite, forecasts. No accounts, no tracking.">
+
+<!-- MapLibre GL JS -->
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+
+<!-- Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<style>
+  /* ═══════════════════════════════════════════
+     CSS VARIABLES
+     ═══════════════════════════════════════════ */
+  :root {
+    --bg-primary: #0a0e17;
+    --bg-secondary: #111827;
+    --bg-panel: rgba(10, 14, 23, 0.92);
+    --bg-glass: rgba(17, 24, 39, 0.75);
+    --border-subtle: rgba(255, 255, 255, 0.06);
+    --border-active: rgba(99, 179, 237, 0.3);
+    --text-primary: #e2e8f0;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --accent: #38bdf8;
+    --accent-dim: rgba(56, 189, 248, 0.15);
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    --success: #10b981;
+    --radius: 12px;
+    --radius-sm: 8px;
+    --font: 'DM Sans', -apple-system, sans-serif;
+    --mono: 'JetBrains Mono', monospace;
+    --shadow-lg: 0 24px 48px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.3);
+    --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* ═══════════════════════════════════════════
+     RESET & BASE
+     ═══════════════════════════════════════════ */
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    font-family: var(--font);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ═══════════════════════════════════════════
+     MAP (full bleed)
+     ═══════════════════════════════════════════ */
+  #map {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+  }
+
+  /* MapLibre overrides */
+  .maplibregl-ctrl-attrib { opacity: 0.4; font-size: 10px !important; }
+  .maplibregl-ctrl-attrib a { color: var(--text-muted) !important; }
+  .maplibregl-ctrl-group {
+    background: var(--bg-panel) !important;
+    border: 1px solid var(--border-subtle) !important;
+    border-radius: var(--radius-sm) !important;
+    overflow: hidden;
+    backdrop-filter: blur(16px);
+  }
+  .maplibregl-ctrl-group button {
+    width: 36px !important;
+    height: 36px !important;
+  }
+  .maplibregl-ctrl-group button + button {
+    border-top: 1px solid var(--border-subtle) !important;
+  }
+  .maplibregl-ctrl button .maplibregl-ctrl-icon {
+    filter: invert(0.85);
+  }
+
+  /* ═══════════════════════════════════════════
+     TOP BAR — Logo + Search
+     ═══════════════════════════════════════════ */
+  .top-bar {
+    position: fixed;
+    top: 16px;
+    left: 16px;
+    right: 16px;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    pointer-events: none;
+  }
+
+  .logo {
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    background: var(--bg-panel);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius);
+    cursor: default;
+    flex-shrink: 0;
+    box-shadow: var(--shadow-md);
+  }
+
+  .logo-icon {
+    width: 24px;
+    height: 24px;
+  }
+
+  .logo-text {
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+  }
+
+  .logo-badge {
+    font-size: 9px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    background: var(--accent-dim);
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-left: 2px;
+  }
+
+  .search-container {
+    pointer-events: auto;
+    position: relative;
+    flex: 1;
+    max-width: 420px;
+  }
+
+  .search-input {
+    width: 100%;
+    padding: 11px 16px 11px 40px;
+    background: var(--bg-panel);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius);
+    color: var(--text-primary);
+    font-family: var(--font);
+    font-size: 14px;
+    outline: none;
+    transition: border-color var(--transition);
+    box-shadow: var(--shadow-md);
+  }
+
+  .search-input::placeholder { color: var(--text-muted); }
+  .search-input:focus { border-color: var(--border-active); }
+
+  .search-icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    pointer-events: none;
+  }
+
+  .search-results {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    background: var(--bg-panel);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius);
+    overflow: hidden;
+    display: none;
+    box-shadow: var(--shadow-lg);
+  }
+
+  .search-results.active { display: block; }
+
+  .search-result-item {
+    padding: 10px 16px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text-secondary);
+    transition: background var(--transition);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .search-result-item:last-child { border-bottom: none; }
+  .search-result-item:hover {
+    background: var(--accent-dim);
+    color: var(--text-primary);
+  }
+
+  /* ═══════════════════════════════════════════
+     RIGHT SIDEBAR — Layer Controls
+     ═══════════════════════════════════════════ */
+  .sidebar {
+    position: fixed;
+    top: 80px;
+    right: 16px;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    background: var(--bg-panel);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius);
+    padding: 6px;
+    box-shadow: var(--shadow-md);
+  }
+
+  .layer-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 14px;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    font-family: var(--font);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition);
+    white-space: nowrap;
+    min-width: 120px;
+  }
+
+  .layer-btn:hover { background: rgba(255, 255, 255, 0.04); color: var(--text-primary); }
+  .layer-btn.active { background: var(--accent-dim); color: var(--accent); }
+
+  .layer-btn svg { width: 16px; height: 16px; flex-shrink: 0; }
+
+  .layer-divider {
+    height: 1px;
+    background: var(--border-subtle);
+    margin: 4px 8px;
+  }
+
+  /* ═══════════════════════════════════════════
+     BOTTOM TIMELINE BAR
+     ═══════════════════════════════════════════ */
+  .timeline-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    background: linear-gradient(to top, var(--bg-panel) 70%, transparent);
+    padding: 40px 20px 16px;
+    pointer-events: none;
+  }
+
+  .timeline-inner {
+    pointer-events: auto;
+    max-width: 800px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .timeline-label {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--accent);
+    min-width: 90px;
+    text-align: center;
+    background: var(--bg-panel);
+    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-subtle);
+  }
+
+  .timeline-slider {
+    flex: 1;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+
+  .timeline-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 12px rgba(56, 189, 248, 0.4);
+    cursor: grab;
+    transition: transform 0.15s ease;
+  }
+
+  .timeline-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.3);
+  }
+
+  .timeline-play {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-panel);
+    color: var(--text-primary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--transition);
+    flex-shrink: 0;
+  }
+
+  .timeline-play:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  /* ═══════════════════════════════════════════
+     POINT FORECAST DRAWER
+     ═══════════════════════════════════════════ */
+  .forecast-drawer {
+    position: fixed;
+    bottom: -400px;
+    left: 16px;
+    right: 16px;
+    max-width: 480px;
+    z-index: 150;
+    background: var(--bg-panel);
+    backdrop-filter: blur(24px);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius) var(--radius) 0 0;
+    padding: 20px;
+    transition: bottom 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .forecast-drawer.open { bottom: 70px; }
+
+  .forecast-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 16px;
+  }
+
+  .forecast-location {
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  .forecast-coords {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+
+  .forecast-close {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 1px solid var(--border-subtle);
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    transition: all var(--transition);
+  }
+
+  .forecast-close:hover { border-color: var(--text-secondary); color: var(--text-primary); }
+
+  .forecast-temp-hero {
+    font-size: 48px;
+    font-weight: 300;
+    letter-spacing: -0.03em;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+
+  .forecast-temp-hero span {
+    font-size: 24px;
+    color: var(--text-muted);
+    font-weight: 400;
+  }
+
+  .forecast-condition {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 20px;
+  }
+
+  .forecast-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    background: var(--border-subtle);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+  }
+
+  .forecast-stat {
+    background: var(--bg-secondary);
+    padding: 12px 10px;
+    text-align: center;
+  }
+
+  .forecast-stat-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+  }
+
+  .forecast-stat-value {
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+  }
+
+  /* ═══════════════════════════════════════════
+     DATA FRESHNESS BADGE
+     ═══════════════════════════════════════════ */
+  .freshness {
+    position: fixed;
+    bottom: 76px;
+    right: 16px;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: var(--bg-panel);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--border-subtle);
+    border-radius: 20px;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-muted);
+  }
+
+  .freshness-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--success);
+    animation: pulse-dot 2s infinite;
+  }
+
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* ═══════════════════════════════════════════
+     LEGEND
+     ═══════════════════════════════════════════ */
+  .legend {
+    position: fixed;
+    left: 16px;
+    bottom: 76px;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    background: var(--bg-panel);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    font-size: 10px;
+    color: var(--text-muted);
+    opacity: 0;
+    transition: opacity var(--transition);
+    pointer-events: none;
+  }
+
+  .legend.visible { opacity: 1; }
+
+  .legend-gradient {
+    width: 120px;
+    height: 8px;
+    border-radius: 4px;
+  }
+
+  .legend-gradient.temp {
+    background: linear-gradient(to right, #1e3a5f, #2563eb, #06b6d4, #10b981, #84cc16, #eab308, #f97316, #ef4444, #991b1b);
+  }
+
+  .legend-gradient.radar {
+    background: linear-gradient(to right, #00000000, #00ff00, #ffff00, #ff8800, #ff0000, #ff00ff);
+  }
+
+  .legend-labels {
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--mono);
+    font-size: 9px;
+  }
+
+  /* ═══════════════════════════════════════════
+     LOCATION BUTTON
+     ═══════════════════════════════════════════ */
+  .locate-btn {
+    position: fixed;
+    bottom: 76px;
+    right: 160px;
+    z-index: 100;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-panel);
+    backdrop-filter: blur(16px);
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--transition);
+    box-shadow: var(--shadow-md);
+  }
+
+  .locate-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* ═══════════════════════════════════════════
+     MOBILE RESPONSIVE
+     ═══════════════════════════════════════════ */
+  @media (max-width: 640px) {
+    .top-bar { top: 10px; left: 10px; right: 10px; }
+    .logo-badge { display: none; }
+    .search-container { max-width: none; }
+    .sidebar { top: auto; bottom: 76px; right: 10px; flex-direction: row; padding: 4px; }
+    .layer-btn { min-width: auto; padding: 8px 10px; }
+    .layer-btn span { display: none; }
+    .forecast-drawer { left: 10px; right: 10px; }
+    .forecast-drawer.open { bottom: 60px; }
+    .timeline-bar { padding: 30px 10px 10px; }
+    .legend { left: 10px; bottom: 66px; }
+    .freshness { bottom: 66px; right: 10px; }
+    .locate-btn { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════
+     MAP
+     ════════════════════════════════════════════ -->
+<div id="map"></div>
+
+<!-- ════════════════════════════════════════════
+     TOP BAR
+     ════════════════════════════════════════════ -->
+<div class="top-bar">
+  <div class="logo">
+    <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <path d="M3 8c3-4 6-5 9-3s6 1 9-3" stroke-linecap="round"/>
+      <path d="M3 14c3-4 6-5 9-3s6 1 9-3" stroke-linecap="round" opacity="0.5"/>
+      <path d="M3 20c3-4 6-5 9-3s6 1 9-3" stroke-linecap="round" opacity="0.25"/>
+    </svg>
+    <span class="logo-text">Gale</span>
+    <span class="logo-badge">Alpha</span>
+  </div>
+
+  <div class="search-container">
+    <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/>
+    </svg>
+    <input class="search-input" type="text" placeholder="Search city or address..." id="searchInput" autocomplete="off">
+    <div class="search-results" id="searchResults"></div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════
+     LAYER SIDEBAR
+     ════════════════════════════════════════════ -->
+<div class="sidebar">
+  <button class="layer-btn active" data-layer="radar" title="Radar">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+      <circle cx="12" cy="12" r="3"/><path d="M6.3 6.3a9 9 0 000 12.73"/><path d="M17.7 6.3a9 9 0 010 12.73"/>
+    </svg>
+    <span>Radar</span>
+  </button>
+
+  <button class="layer-btn" data-layer="temp" title="Temperature">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+      <path d="M12 9V2m0 0L9 5m3-3l3 3"/><path d="M12 15v7m0 0l3-3m-3 3l-3-3"/><circle cx="12" cy="12" r="3"/>
+    </svg>
+    <span>Temp</span>
+  </button>
+
+  <button class="layer-btn" data-layer="satellite" title="Satellite">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+      <circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><ellipse cx="12" cy="12" rx="4" ry="10"/>
+    </svg>
+    <span>Satellite</span>
+  </button>
+
+  <div class="layer-divider"></div>
+
+  <button class="layer-btn" data-layer="alerts" title="NWS Alerts">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+      <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+    </svg>
+    <span>Alerts</span>
+  </button>
+</div>
+
+<!-- ════════════════════════════════════════════
+     LEGEND
+     ════════════════════════════════════════════ -->
+<div class="legend" id="legend">
+  <div>
+    <div class="legend-gradient temp" id="legendGradient"></div>
+    <div class="legend-labels">
+      <span id="legendMin">-40°F</span>
+      <span id="legendMax">120°F</span>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════
+     LOCATE ME
+     ════════════════════════════════════════════ -->
+<button class="locate-btn" id="locateBtn" title="My location">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <circle cx="12" cy="12" r="3"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/>
+  </svg>
+</button>
+
+<!-- ════════════════════════════════════════════
+     FRESHNESS
+     ════════════════════════════════════════════ -->
+<div class="freshness">
+  <div class="freshness-dot"></div>
+  <span id="freshnessText">MRMS 2 min</span>
+</div>
+
+<!-- ════════════════════════════════════════════
+     TIMELINE
+     ════════════════════════════════════════════ -->
+<div class="timeline-bar">
+  <div class="timeline-inner">
+    <button class="timeline-play" id="playBtn" title="Play animation">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+        <polygon points="5,3 19,12 5,21"/>
+      </svg>
+    </button>
+    <input class="timeline-slider" type="range" min="0" max="17" value="0" id="timeSlider">
+    <div class="timeline-label" id="timeLabel">Now</div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════
+     POINT FORECAST DRAWER
+     ════════════════════════════════════════════ -->
+<div class="forecast-drawer" id="forecastDrawer">
+  <div class="forecast-header">
+    <div>
+      <div class="forecast-location" id="forecastLocation">—</div>
+      <div class="forecast-coords" id="forecastCoords">—</div>
+    </div>
+    <button class="forecast-close" id="forecastClose">✕</button>
+  </div>
+  <div class="forecast-temp-hero" id="forecastTemp">—<span>°F</span></div>
+  <div class="forecast-condition" id="forecastCondition">Tap anywhere on the map</div>
+  <div class="forecast-grid">
+    <div class="forecast-stat">
+      <div class="forecast-stat-label">Wind</div>
+      <div class="forecast-stat-value" id="fWind">—</div>
+    </div>
+    <div class="forecast-stat">
+      <div class="forecast-stat-label">Humidity</div>
+      <div class="forecast-stat-value" id="fHumidity">—</div>
+    </div>
+    <div class="forecast-stat">
+      <div class="forecast-stat-label">Dew Pt</div>
+      <div class="forecast-stat-value" id="fDewpoint">—</div>
+    </div>
+    <div class="forecast-stat">
+      <div class="forecast-stat-label">Precip</div>
+      <div class="forecast-stat-value" id="fPrecip">—</div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════
+     JAVASCRIPT
+     ════════════════════════════════════════════ -->
+<script>
+(function() {
+  'use strict';
+
+  // ─── Map Setup ──────────────────────────────
+  const map = new maplibregl.Map({
+    container: 'map',
+    style: {
+      version: 8,
+      name: 'Gale Dark',
+      sources: {
+        'carto-dark': {
+          type: 'raster',
+          tiles: [
+            'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
+            'https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
+            'https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png'
+          ],
+          tileSize: 256,
+          attribution: '&copy; <a href="https://carto.com">CARTO</a> &copy; <a href="https://osm.org">OSM</a>'
+        }
+      },
+      layers: [{
+        id: 'carto-dark-layer',
+        type: 'raster',
+        source: 'carto-dark',
+        minzoom: 0,
+        maxzoom: 19
+      }]
+    },
+    center: [-95.7, 39.8], // Center of CONUS
+    zoom: 4,
+    maxZoom: 12,
+    minZoom: 2,
+    attributionControl: true
+  });
+
+  map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
+
+  // ─── Layer State ────────────────────────────
+  const layers = {
+    radar: true,
+    temp: false,
+    satellite: false,
+    alerts: false
+  };
+
+  // ─── Add MRMS Radar (WMS from Iowa State Mesonet) ───
+  map.on('load', () => {
+    // MRMS Radar — Iowa State Mesonet serves NEXRAD/MRMS composites
+    map.addSource('radar', {
+      type: 'raster',
+      tiles: [
+        'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/{z}/{x}/{y}.png'
+      ],
+      tileSize: 256,
+      attribution: '&copy; <a href="https://mesonet.agron.iastate.edu">Iowa State Mesonet</a>'
+    });
+
+    map.addLayer({
+      id: 'radar-layer',
+      type: 'raster',
+      source: 'radar',
+      paint: {
+        'raster-opacity': 0.7,
+        'raster-fade-duration': 300
+      }
+    });
+
+    // Satellite — GOES visible via Iowa State Mesonet
+    map.addSource('satellite', {
+      type: 'raster',
+      tiles: [
+        'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/goes-vis-1km-900913/{z}/{x}/{y}.png'
+      ],
+      tileSize: 256,
+      attribution: '&copy; <a href="https://mesonet.agron.iastate.edu">Iowa State Mesonet</a> / NOAA GOES'
+    });
+
+    map.addLayer({
+      id: 'satellite-layer',
+      type: 'raster',
+      source: 'satellite',
+      paint: {
+        'raster-opacity': 0.6,
+        'raster-fade-duration': 300
+      },
+      layout: { visibility: 'none' }
+    });
+
+    // NWS Alerts (GeoJSON)
+    map.addSource('alerts', {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: [] }
+    });
+
+    map.addLayer({
+      id: 'alerts-fill',
+      type: 'fill',
+      source: 'alerts',
+      paint: {
+        'fill-color': [
+          'match',
+          ['get', 'severity'],
+          'Extreme', '#dc2626',
+          'Severe', '#f97316',
+          'Moderate', '#eab308',
+          'Minor', '#3b82f6',
+          '#6b7280'
+        ],
+        'fill-opacity': 0.2
+      },
+      layout: { visibility: 'none' }
+    });
+
+    map.addLayer({
+      id: 'alerts-line',
+      type: 'line',
+      source: 'alerts',
+      paint: {
+        'line-color': [
+          'match',
+          ['get', 'severity'],
+          'Extreme', '#dc2626',
+          'Severe', '#f97316',
+          'Moderate', '#eab308',
+          'Minor', '#3b82f6',
+          '#6b7280'
+        ],
+        'line-width': 1.5,
+        'line-opacity': 0.8
+      },
+      layout: { visibility: 'none' }
+    });
+
+    // Fetch alerts
+    fetchAlerts();
+
+    updateLayerVisibility();
+  });
+
+  // ─── Fetch NWS Alerts ───────────────────────
+  async function fetchAlerts() {
+    try {
+      const resp = await fetch('https://api.weather.gov/alerts/active?status=actual&message_type=alert');
+      const data = await resp.json();
+      if (map.getSource('alerts')) {
+        map.getSource('alerts').setData(data);
+      }
+    } catch (e) {
+      console.warn('Failed to fetch NWS alerts:', e);
+    }
+  }
+
+  // ─── Radar Auto-Refresh ─────────────────────
+  setInterval(() => {
+    if (layers.radar && map.getSource('radar')) {
+      // Force tile refresh by updating source tiles with cache-bust
+      const ts = Date.now();
+      map.getSource('radar').setTiles([
+        `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/{z}/{x}/{y}.png?_=${ts}`
+      ]);
+      document.getElementById('freshnessText').textContent = `MRMS ${new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`;
+    }
+  }, 120000); // 2 minutes
+
+  // ─── Layer Toggle ───────────────────────────
+  function updateLayerVisibility() {
+    if (map.getLayer('radar-layer')) {
+      map.setLayoutProperty('radar-layer', 'visibility', layers.radar ? 'visible' : 'none');
+    }
+    if (map.getLayer('satellite-layer')) {
+      map.setLayoutProperty('satellite-layer', 'visibility', layers.satellite ? 'visible' : 'none');
+    }
+    if (map.getLayer('alerts-fill')) {
+      map.setLayoutProperty('alerts-fill', 'visibility', layers.alerts ? 'visible' : 'none');
+      map.setLayoutProperty('alerts-line', 'visibility', layers.alerts ? 'visible' : 'none');
+    }
+
+    // Legend
+    const legend = document.getElementById('legend');
+    const grad = document.getElementById('legendGradient');
+    const lMin = document.getElementById('legendMin');
+    const lMax = document.getElementById('legendMax');
+
+    if (layers.radar) {
+      legend.classList.add('visible');
+      grad.className = 'legend-gradient radar';
+      lMin.textContent = 'Light';
+      lMax.textContent = 'Heavy';
+    } else if (layers.temp) {
+      legend.classList.add('visible');
+      grad.className = 'legend-gradient temp';
+      lMin.textContent = '-40°F';
+      lMax.textContent = '120°F';
+    } else {
+      legend.classList.remove('visible');
+    }
+  }
+
+  document.querySelectorAll('.layer-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const layer = btn.dataset.layer;
+      layers[layer] = !layers[layer];
+      btn.classList.toggle('active', layers[layer]);
+      updateLayerVisibility();
+    });
+  });
+
+  // ─── Search (Nominatim) ─────────────────────
+  const searchInput = document.getElementById('searchInput');
+  const searchResults = document.getElementById('searchResults');
+  let searchTimeout;
+
+  searchInput.addEventListener('input', () => {
+    clearTimeout(searchTimeout);
+    const q = searchInput.value.trim();
+    if (q.length < 3) { searchResults.classList.remove('active'); return; }
+
+    searchTimeout = setTimeout(async () => {
+      try {
+        const resp = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&countrycodes=us&limit=5`);
+        const results = await resp.json();
+        searchResults.innerHTML = '';
+        if (results.length === 0) {
+          searchResults.classList.remove('active');
+          return;
+        }
+        results.forEach(r => {
+          const item = document.createElement('div');
+          item.className = 'search-result-item';
+          item.textContent = r.display_name;
+          item.addEventListener('click', () => {
+            map.flyTo({ center: [parseFloat(r.lon), parseFloat(r.lat)], zoom: 8, duration: 1500 });
+            searchResults.classList.remove('active');
+            searchInput.value = r.display_name.split(',')[0];
+          });
+          searchResults.appendChild(item);
+        });
+        searchResults.classList.add('active');
+      } catch (e) { console.warn('Search error:', e); }
+    }, 350);
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.search-container')) searchResults.classList.remove('active');
+  });
+
+  // ─── Point Forecast (NWS API) ───────────────
+  const drawer = document.getElementById('forecastDrawer');
+
+  map.on('click', async (e) => {
+    const { lng, lat } = e.lngLat;
+    
+    // Only fetch forecast for CONUS
+    if (lat < 24 || lat > 50 || lng < -125 || lng > -66) return;
+
+    document.getElementById('forecastLocation').textContent = 'Loading...';
+    document.getElementById('forecastCoords').textContent = `${lat.toFixed(4)}°N, ${Math.abs(lng).toFixed(4)}°W`;
+    document.getElementById('forecastTemp').innerHTML = '—<span>°F</span>';
+    document.getElementById('forecastCondition').textContent = 'Fetching forecast...';
+    document.getElementById('fWind').textContent = '—';
+    document.getElementById('fHumidity').textContent = '—';
+    document.getElementById('fDewpoint').textContent = '—';
+    document.getElementById('fPrecip').textContent = '—';
+    drawer.classList.add('open');
+
+    try {
+      // Step 1: Get grid point from NWS
+      const pointResp = await fetch(`https://api.weather.gov/points/${lat.toFixed(4)},${lng.toFixed(4)}`, {
+        headers: { 'User-Agent': 'Gale Weather (galeweather.com)' }
+      });
+      const pointData = await pointResp.json();
+
+      if (!pointData.properties?.forecast) {
+        document.getElementById('forecastLocation').textContent = 'No forecast available';
+        document.getElementById('forecastCondition').textContent = 'NWS coverage may not include this area';
+        return;
+      }
+
+      // Step 2: Get detailed forecast
+      const fcResp = await fetch(pointData.properties.forecastHourly, {
+        headers: { 'User-Agent': 'Gale Weather (galeweather.com)' }
+      });
+      const fcData = await fcResp.json();
+      const now = fcData.properties.periods[0];
+
+      const city = pointData.properties.relativeLocation?.properties;
+      const locName = city ? `${city.city}, ${city.state}` : `${lat.toFixed(2)}°N`;
+
+      document.getElementById('forecastLocation').textContent = locName;
+      document.getElementById('forecastTemp').innerHTML = `${now.temperature}<span>°${now.temperatureUnit}</span>`;
+      document.getElementById('forecastCondition').textContent = now.shortForecast;
+      document.getElementById('fWind').textContent = now.windSpeed;
+      document.getElementById('fHumidity').textContent = now.relativeHumidity?.value ? `${Math.round(now.relativeHumidity.value)}%` : '—';
+      document.getElementById('fDewpoint').textContent = now.dewpoint?.value ? `${Math.round(now.dewpoint.value * 9/5 + 32)}°F` : '—';
+      document.getElementById('fPrecip').textContent = now.probabilityOfPrecipitation?.value ? `${now.probabilityOfPrecipitation.value}%` : '0%';
+
+    } catch (e) {
+      console.warn('Forecast error:', e);
+      document.getElementById('forecastLocation').textContent = 'Forecast unavailable';
+      document.getElementById('forecastCondition').textContent = 'NWS API may be temporarily down';
+    }
+  });
+
+  document.getElementById('forecastClose').addEventListener('click', () => {
+    drawer.classList.remove('open');
+  });
+
+  // ─── Timeline (radar animation frames) ──────
+  const timeSlider = document.getElementById('timeSlider');
+  const timeLabel = document.getElementById('timeLabel');
+  const playBtn = document.getElementById('playBtn');
+  let playing = false;
+  let playInterval;
+
+  // Iowa State Mesonet serves time-stamped radar tiles
+  const radarProducts = [
+    'nexrad-n0q-900913',           // Now
+    'nexrad-n0q-900913-m05m',      // 5 min ago
+    'nexrad-n0q-900913-m10m',      // 10 min ago
+    'nexrad-n0q-900913-m15m',      // 15 min ago
+    'nexrad-n0q-900913-m20m',      // 20 min ago
+    'nexrad-n0q-900913-m25m',      // 25 min ago
+    'nexrad-n0q-900913-m30m',      // 30 min ago
+    'nexrad-n0q-900913-m35m',      // 35 min ago
+    'nexrad-n0q-900913-m40m',      // 40 min ago
+    'nexrad-n0q-900913-m45m',      // 45 min ago
+    'nexrad-n0q-900913-m50m',      // 50 min ago
+  ];
+
+  timeSlider.max = radarProducts.length - 1;
+
+  timeSlider.addEventListener('input', () => {
+    const idx = parseInt(timeSlider.value);
+    updateRadarFrame(idx);
+  });
+
+  function updateRadarFrame(idx) {
+    if (!map.getSource('radar')) return;
+    const product = radarProducts[idx];
+    map.getSource('radar').setTiles([
+      `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/${product}/{z}/{x}/{y}.png`
+    ]);
+    if (idx === 0) {
+      timeLabel.textContent = 'Now';
+    } else {
+      timeLabel.textContent = `-${idx * 5} min`;
+    }
+  }
+
+  playBtn.addEventListener('click', () => {
+    playing = !playing;
+    if (playing) {
+      playBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="3" width="4" height="18"/><rect x="15" y="3" width="4" height="18"/></svg>';
+      let frame = parseInt(timeSlider.value);
+      // Play from oldest to newest
+      frame = radarProducts.length - 1;
+      timeSlider.value = frame;
+      updateRadarFrame(frame);
+
+      playInterval = setInterval(() => {
+        frame--;
+        if (frame < 0) frame = radarProducts.length - 1;
+        timeSlider.value = frame;
+        updateRadarFrame(frame);
+      }, 500);
+    } else {
+      playBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>';
+      clearInterval(playInterval);
+    }
+  });
+
+  // ─── Locate Me ──────────────────────────────
+  document.getElementById('locateBtn').addEventListener('click', () => {
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          map.flyTo({
+            center: [pos.coords.longitude, pos.coords.latitude],
+            zoom: 8,
+            duration: 1500
+          });
+        },
+        () => console.warn('Location access denied')
+      );
+    }
+  });
+
+  // ─── Keyboard Shortcuts ─────────────────────
+  document.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT') return;
+    switch(e.key) {
+      case '/': e.preventDefault(); searchInput.focus(); break;
+      case 'Escape': drawer.classList.remove('open'); searchResults.classList.remove('active'); searchInput.blur(); break;
+      case ' ': e.preventDefault(); playBtn.click(); break;
+      case 'r': document.querySelector('[data-layer="radar"]').click(); break;
+      case 't': document.querySelector('[data-layer="temp"]').click(); break;
+      case 's': document.querySelector('[data-layer="satellite"]').click(); break;
+    }
+  });
+
+})();
+</script>
+</body>
+</html>
