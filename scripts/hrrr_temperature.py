@@ -120,20 +120,22 @@ def main():
         "-alpha", "-of", "GTiff"
     ], "Color relief → RGBA")
 
-    # Step 4: RGBA GeoTIFF → Slippy Map tiles (zoom 2-8)
+    # Step 4: RGBA GeoTIFF → Slippy Map tiles (zoom 2-6)
+    # Zoom 2-6 covers CONUS well for temperature; zoom 7-8 generates 80k+ tiles
+    # and takes too long to sync. HRRR's 3km resolution is fully captured at zoom 6.
     if os.path.exists(OUTPUT_DIR):
         shutil.rmtree(OUTPUT_DIR)
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     run_cmd([
         "gdal2tiles.py",
-        "--zoom=2-8",
+        "--zoom=2-6",
         "--processes=4",
         "--resampling=bilinear",
         "--xyz",
         "--exclude",
         RGBA_FILE, OUTPUT_DIR
-    ], "Rendering tiles (zoom 2-8)")
+    ], "Rendering tiles (zoom 2-6)")
 
     tile_count = count_tiles(OUTPUT_DIR)
     print(f"Generated {tile_count} tiles in {OUTPUT_DIR}")
@@ -144,7 +146,7 @@ def main():
         "hrrr_run": f"{date_str} {hour_str}Z",
         "hrrr_date": date_str,
         "hrrr_hour": hour_str,
-        "zoom_range": "2-8",
+        "zoom_range": "2-6",
         "tile_count": tile_count,
         "variable": "TMP:2m above ground"
     }

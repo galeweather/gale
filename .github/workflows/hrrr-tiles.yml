@@ -8,7 +8,7 @@ on:
 jobs:
   generate-tiles:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
@@ -32,6 +32,7 @@ jobs:
           aws s3 sync scripts/output/temperature/ s3://gale-tiles/temperature/ \
             --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" \
             --delete \
+            --size-only \
             --exclude "metadata.json" \
             --cache-control "public, max-age=3600" \
             --no-progress
