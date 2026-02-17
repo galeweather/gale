@@ -684,7 +684,7 @@
     <span>Radar</span>
   </button>
 
-  <button class="layer-btn" data-layer="temp" title="Temperature">
+  <button class="layer-btn active" data-layer="temp" title="Temperature">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
       <path d="M12 9V2m0 0L9 5m3-3l3 3"/><path d="M12 15v7m0 0l3-3m-3 3l-3-3"/><circle cx="12" cy="12" r="3"/>
     </svg>
@@ -817,6 +817,7 @@
     style: {
       version: 8,
       name: 'Gale Dark',
+      glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
       sources: {
         'carto-dark': {
           type: 'raster',
@@ -852,7 +853,7 @@
   // ─── Layer State ────────────────────────────
   const layers = {
     radar: true,
-    temp: false,
+    temp: true,
     satellite: false,
     alerts: false
   };
@@ -876,10 +877,9 @@
       type: 'raster',
       source: 'temperature',
       paint: {
-        'raster-opacity': 0.6,
+        'raster-opacity': 0.25,
         'raster-fade-duration': 300
-      },
-      layout: { visibility: 'none' }
+      }
     });
 
     // MRMS Radar — Iowa State Mesonet (renders on top of temperature)
@@ -1002,11 +1002,10 @@
       layout: {
         'text-field': ['get', 'label'],
         'text-size': 13,
-        'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+        'text-font': ['Open Sans Semibold'],
         'text-allow-overlap': false,
         'text-ignore-placement': false,
-        'text-padding': 8,
-        visibility: 'none'
+        'text-padding': 8
       },
       paint: {
         'text-color': '#ffffff',
