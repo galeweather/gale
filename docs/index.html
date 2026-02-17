@@ -765,9 +765,32 @@
     alerts: false
   };
 
-  // ─── Add MRMS Radar (WMS from Iowa State Mesonet) ───
+  // ─── Add Map Layers (order matters: bottom → top) ───
   map.on('load', () => {
-    // MRMS Radar — Iowa State Mesonet serves NEXRAD/MRMS composites
+    // HRRR Temperature — Cloudflare R2 tiles (base layer, renders below radar)
+    map.addSource('temperature', {
+      type: 'raster',
+      tiles: [
+        `${TILE_BASE}/temperature/{z}/{x}/{y}.png`
+      ],
+      tileSize: 256,
+      minzoom: 2,
+      maxzoom: 6,
+      attribution: '&copy; NOAA HRRR via Gale'
+    });
+
+    map.addLayer({
+      id: 'temperature-layer',
+      type: 'raster',
+      source: 'temperature',
+      paint: {
+        'raster-opacity': 0.6,
+        'raster-fade-duration': 300
+      },
+      layout: { visibility: 'none' }
+    });
+
+    // MRMS Radar — Iowa State Mesonet (renders on top of temperature)
     map.addSource('radar', {
       type: 'raster',
       tiles: [
@@ -801,29 +824,6 @@
       id: 'satellite-layer',
       type: 'raster',
       source: 'satellite',
-      paint: {
-        'raster-opacity': 0.6,
-        'raster-fade-duration': 300
-      },
-      layout: { visibility: 'none' }
-    });
-
-    // HRRR Temperature — Cloudflare R2 tiles
-    map.addSource('temperature', {
-      type: 'raster',
-      tiles: [
-        `${TILE_BASE}/temperature/{z}/{x}/{y}.png`
-      ],
-      tileSize: 256,
-      minzoom: 2,
-      maxzoom: 6,
-      attribution: '&copy; NOAA HRRR via Gale'
-    });
-
-    map.addLayer({
-      id: 'temperature-layer',
-      type: 'raster',
-      source: 'temperature',
       paint: {
         'raster-opacity': 0.6,
         'raster-fade-duration': 300
@@ -956,6 +956,11 @@
     }
     if (map.getLayer('temperature-layer')) {
       map.setLayoutProperty('temperature-layer', 'visibility', layers.temp ? 'visible' : 'none');
+      // Temp as subtle base wash when radar is also on, full opacity when solo
+      if (layers.temp) {
+        const tempOpacity = layers.radar ? 0.25 : 0.6;
+        map.setPaintProperty('temperature-layer', 'raster-opacity', tempOpacity);
+      }
     }
     if (map.getLayer('satellite-layer')) {
       map.setLayoutProperty('satellite-layer', 'visibility', layers.satellite ? 'visible' : 'none');
