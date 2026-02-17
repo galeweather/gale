@@ -1,0 +1,44 @@
+name: HRRR Temperature Tiles
+
+on:
+  schedule:
+    - cron: '20 * * * *'  # minute 20 past every hour
+  workflow_dispatch:       # manual trigger for testing
+
+jobs:
+  generate-tiles:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install GDAL
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq gdal-bin python3-gdal
+
+      - name: Run HRRR pipeline
+        run: python3 scripts/hrrr_temperature.py
+
+      - name: Sync tiles to R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+        run: |
+          # Sync tile PNGs with 1-hour cache
+          aws s3 sync scripts/output/temperature/ s3://gale-tiles/temperature/ \
+            --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" \
+            --delete \
+            --exclude "metadata.json" \
+            --cache-control "public, max-age=3600" \
+            --no-progress
+
+          # Upload metadata.json with 5-minute cache
+          aws s3 cp scripts/output/temperature/metadata.json s3://gale-tiles/temperature/metadata.json \
+            --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" \
+            --cache-control "public, max-age=300" \
+            --content-type "application/json" \
+            --no-progress

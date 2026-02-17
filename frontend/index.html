@@ -754,6 +754,9 @@
 
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
 
+  // ─── Tile Base URL (Cloudflare R2) ────────────
+  const TILE_BASE = 'https://pub-9975b1cfcbf9480f9e1333c7e208a6ce.r2.dev';
+
   // ─── Layer State ────────────────────────────
   const layers = {
     radar: true,
@@ -798,6 +801,29 @@
       id: 'satellite-layer',
       type: 'raster',
       source: 'satellite',
+      paint: {
+        'raster-opacity': 0.6,
+        'raster-fade-duration': 300
+      },
+      layout: { visibility: 'none' }
+    });
+
+    // HRRR Temperature — Cloudflare R2 tiles
+    map.addSource('temperature', {
+      type: 'raster',
+      tiles: [
+        `${TILE_BASE}/temperature/{z}/{x}/{y}.png`
+      ],
+      tileSize: 256,
+      minzoom: 2,
+      maxzoom: 8,
+      attribution: '&copy; NOAA HRRR via Gale'
+    });
+
+    map.addLayer({
+      id: 'temperature-layer',
+      type: 'raster',
+      source: 'temperature',
       paint: {
         'raster-opacity': 0.6,
         'raster-fade-duration': 300
@@ -881,10 +907,34 @@
     }
   }, 120000); // 2 minutes
 
+  // ─── Temperature Freshness Check ──────────────
+  let lastTempRun = '';
+  async function checkTempFreshness() {
+    try {
+      const resp = await fetch(`${TILE_BASE}/temperature/metadata.json?_=${Date.now()}`);
+      if (!resp.ok) return;
+      const meta = await resp.json();
+      if (meta.hrrr_run && meta.hrrr_run !== lastTempRun) {
+        lastTempRun = meta.hrrr_run;
+        if (map.getSource('temperature')) {
+          const ts = Date.now();
+          map.getSource('temperature').setTiles([
+            `${TILE_BASE}/temperature/{z}/{x}/{y}.png?_=${ts}`
+          ]);
+        }
+      }
+    } catch (e) { /* R2 may not have tiles yet — ignore */ }
+  }
+  setInterval(checkTempFreshness, 300000); // 5 minutes
+  checkTempFreshness(); // initial check
+
   // ─── Layer Toggle ───────────────────────────
   function updateLayerVisibility() {
     if (map.getLayer('radar-layer')) {
       map.setLayoutProperty('radar-layer', 'visibility', layers.radar ? 'visible' : 'none');
+    }
+    if (map.getLayer('temperature-layer')) {
+      map.setLayoutProperty('temperature-layer', 'visibility', layers.temp ? 'visible' : 'none');
     }
     if (map.getLayer('satellite-layer')) {
       map.setLayoutProperty('satellite-layer', 'visibility', layers.satellite ? 'visible' : 'none');

@@ -1,5 +1,7 @@
 scripts/tiles/
+scripts/output/
 scripts/test.tif
 scripts/test_byte.vrt
 scripts/test.grib2
+scripts/hrrr_tmp2m.*
 .DS_Store
