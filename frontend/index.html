@@ -745,8 +745,8 @@
         maxzoom: 19
       }]
     },
-    center: [-95.7, 39.8], // Center of CONUS
-    zoom: 4,
+    center: [-94.3, 46.3], // Minnesota
+    zoom: 6,
     maxZoom: 12,
     minZoom: 2,
     attributionControl: true
@@ -874,6 +874,27 @@
         'line-opacity': 0.8
       },
       layout: { visibility: 'none' }
+    });
+
+    // US State Boundaries (always visible)
+    map.addSource('states', {
+      type: 'geojson',
+      data: 'https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json'
+    });
+
+    map.addLayer({
+      id: 'state-borders',
+      type: 'line',
+      source: 'states',
+      paint: {
+        'line-color': 'rgba(255, 255, 255, 0.25)',
+        'line-width': [
+          'interpolate', ['linear'], ['zoom'],
+          2, 0.5,
+          6, 1.5,
+          10, 2
+        ]
+      }
     });
 
     // Fetch alerts
