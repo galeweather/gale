@@ -1197,16 +1197,54 @@
     }
   }, 120000); // 2 minutes
 
-  // ─── Temperature Freshness Check ──────────────
+  // ─── Service Worker (persistent tile cache + offline) ─────
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  }
+
+  // ─── Smart HRRR Freshness (skip network when no new data exists) ─────
   let lastTempRun = '';
+
+  // Restore last known run from localStorage (instant display, no network)
+  const storedHrrr = JSON.parse(localStorage.getItem('gale_hrrr') || 'null');
+  if (storedHrrr) {
+    lastTempRun = storedHrrr.run;
+    document.getElementById('freshnessText').textContent =
+      `HRRR ${storedHrrr.hour}Z · MRMS live`;
+  }
+
+  function nextHrrrAvailable() {
+    // HRRR publishes hourly, available ~20 min after the hour.
+    // Given the last known run, calculate when a newer one might exist.
+    if (!storedHrrr) return 0; // No stored data — check immediately
+    const d = storedHrrr.date; // "20260217"
+    const h = parseInt(storedHrrr.hour, 10);
+    const yr = parseInt(d.slice(0,4)), mo = parseInt(d.slice(4,6)) - 1, dy = parseInt(d.slice(6,8));
+    // Next run = lastHour + 1, available at :22 (2 min buffer)
+    return Date.UTC(yr, mo, dy, h + 1, 22, 0);
+  }
+
   async function checkTempFreshness() {
+    // Smart skip: don't hit the network if no new HRRR run can exist yet
+    if (Date.now() < nextHrrrAvailable()) return;
+
     try {
       const resp = await fetch(`${TILE_BASE}/temperature/metadata.json?_=${Date.now()}`);
       if (!resp.ok) return;
       const meta = await resp.json();
+
+      // Persist for next session / next check
+      localStorage.setItem('gale_hrrr', JSON.stringify({
+        run: meta.hrrr_run, date: meta.hrrr_date, hour: meta.hrrr_hour
+      }));
+
       if (meta.hrrr_run && meta.hrrr_run !== lastTempRun) {
         lastTempRun = meta.hrrr_run;
-        // Clear pixel-sampling cache so labels read fresh tiles
+        // Tell service worker to purge stale tile cache
+        if (navigator.serviceWorker?.controller) {
+          navigator.serviceWorker.controller.postMessage('clear-tiles');
+        }
+        // Clear in-memory pixel-sampling cache
         Object.keys(tileCache).forEach(k => delete tileCache[k]);
         if (map.getSource('temperature')) {
           const ts = Date.now();
@@ -1214,16 +1252,16 @@
             `${TILE_BASE}/temperature/{z}/{x}/{y}.png?_=${ts}`
           ]);
         }
-        // Refresh temp labels with new data
         setTimeout(updateTempLabels, 1000);
-        // Show HRRR run time in freshness badge
         document.getElementById('freshnessText').textContent =
           `HRRR ${meta.hrrr_hour}Z · MRMS live`;
       }
-    } catch (e) { /* R2 may not have tiles yet — ignore */ }
+    } catch (e) { /* offline — SW serves cached tiles */ }
   }
-  setInterval(checkTempFreshness, 300000); // 5 minutes
-  checkTempFreshness(); // initial check
+
+  // Check immediately on load, then every 5 min (smart skip avoids needless fetches)
+  checkTempFreshness();
+  setInterval(checkTempFreshness, 300000);
 
   // ─── Layer Toggle ───────────────────────────
   function updateLayerVisibility() {
