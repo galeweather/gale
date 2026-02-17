@@ -290,12 +290,31 @@
     border: 1px solid var(--border-subtle);
   }
 
-  .timeline-slider {
+  .timeline-track {
     flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .timeline-track-row {
+    display: flex;
+    align-items: center;
+    height: 20px;
+    position: relative;
+  }
+
+  .timeline-past {
+    flex: 0 0 48%;
+    position: relative;
+  }
+
+  .timeline-slider {
+    width: 100%;
     -webkit-appearance: none;
     appearance: none;
     height: 4px;
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(56, 189, 248, 0.3);
     border-radius: 2px;
     outline: none;
     cursor: pointer;
@@ -315,6 +334,61 @@
 
   .timeline-slider::-webkit-slider-thumb:hover {
     transform: scale(1.3);
+  }
+
+  .timeline-now {
+    flex-shrink: 0;
+    width: 2px;
+    height: 20px;
+    background: var(--accent);
+    box-shadow: 0 0 8px rgba(56, 189, 248, 0.5);
+    position: relative;
+  }
+
+  .timeline-future {
+    flex: 0 0 48%;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 2px;
+    position: relative;
+    align-self: center;
+  }
+
+  .timeline-future-label {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    opacity: 0.5;
+    white-space: nowrap;
+  }
+
+  .timeline-ticks {
+    display: flex;
+    justify-content: space-between;
+    padding: 0 2px;
+  }
+
+  .timeline-tick {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--text-muted);
+    opacity: 0.6;
+  }
+
+  .timeline-tick.now {
+    color: var(--accent);
+    opacity: 1;
+    font-weight: 600;
+  }
+
+  .timeline-tick.future {
+    opacity: 0.3;
   }
 
   .timeline-play {
@@ -674,7 +748,25 @@
         <polygon points="5,3 19,12 5,21"/>
       </svg>
     </button>
-    <input class="timeline-slider" type="range" min="0" max="17" value="0" id="timeSlider">
+    <div class="timeline-track">
+      <div class="timeline-track-row">
+        <div class="timeline-past">
+          <input class="timeline-slider" type="range" min="0" max="10" value="10" id="timeSlider">
+        </div>
+        <div class="timeline-now"></div>
+        <div class="timeline-future">
+          <span class="timeline-future-label">+48h forecast coming</span>
+        </div>
+      </div>
+      <div class="timeline-ticks">
+        <span class="timeline-tick">-50m</span>
+        <span class="timeline-tick">-25m</span>
+        <span class="timeline-tick now">NOW</span>
+        <span class="timeline-tick future">+12h</span>
+        <span class="timeline-tick future">+24h</span>
+        <span class="timeline-tick future">+48h</span>
+      </div>
+    </div>
     <div class="timeline-label" id="timeLabel">Now</div>
   </div>
 </div>
@@ -897,11 +989,101 @@
       }
     });
 
+    // Temperature labels — shows current temp at key cities
+    map.addSource('temp-labels', {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: [] }
+    });
+
+    map.addLayer({
+      id: 'temp-labels-layer',
+      type: 'symbol',
+      source: 'temp-labels',
+      layout: {
+        'text-field': ['get', 'label'],
+        'text-size': 13,
+        'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+        'text-allow-overlap': false,
+        'text-ignore-placement': false,
+        'text-padding': 8,
+        visibility: 'none'
+      },
+      paint: {
+        'text-color': '#ffffff',
+        'text-halo-color': 'rgba(0, 0, 0, 0.7)',
+        'text-halo-width': 1.5
+      }
+    });
+
     // Fetch alerts
     fetchAlerts();
+    fetchTempLabels();
 
     updateLayerVisibility();
   });
+
+  // ─── Temperature Labels ───────────────────────
+  const TEMP_CITIES = [
+    { name: 'Minneapolis', lat: 44.98, lon: -93.27 },
+    { name: 'Duluth', lat: 46.79, lon: -92.10 },
+    { name: 'Rochester', lat: 44.02, lon: -92.47 },
+    { name: 'Chicago', lat: 41.88, lon: -87.63 },
+    { name: 'Denver', lat: 39.74, lon: -104.99 },
+    { name: 'Dallas', lat: 32.78, lon: -96.80 },
+    { name: 'New York', lat: 40.71, lon: -74.01 },
+    { name: 'Miami', lat: 25.76, lon: -80.19 },
+    { name: 'Seattle', lat: 47.61, lon: -122.33 },
+    { name: 'LA', lat: 34.05, lon: -118.24 },
+    { name: 'Phoenix', lat: 33.45, lon: -112.07 },
+    { name: 'Kansas City', lat: 39.10, lon: -94.58 },
+    { name: 'Atlanta', lat: 33.75, lon: -84.39 },
+    { name: 'Detroit', lat: 42.33, lon: -83.05 },
+    { name: 'St. Cloud', lat: 45.56, lon: -94.16 },
+    { name: 'Fargo', lat: 46.88, lon: -96.79 },
+  ];
+
+  async function fetchTempLabels() {
+    const features = [];
+    // Fetch temps in parallel (NWS API, 2-step)
+    const results = await Promise.allSettled(
+      TEMP_CITIES.map(async (city) => {
+        const ptResp = await fetch(
+          `https://api.weather.gov/points/${city.lat.toFixed(4)},${city.lon.toFixed(4)}`,
+          { headers: { 'User-Agent': 'Gale Weather (galeweather.com)' } }
+        );
+        const ptData = await ptResp.json();
+        if (!ptData.properties?.forecastHourly) return null;
+        const fcResp = await fetch(ptData.properties.forecastHourly, {
+          headers: { 'User-Agent': 'Gale Weather (galeweather.com)' }
+        });
+        const fcData = await fcResp.json();
+        const temp = fcData.properties.periods[0].temperature;
+        const unit = fcData.properties.periods[0].temperatureUnit;
+        return { city, temp, unit };
+      })
+    );
+
+    results.forEach(r => {
+      if (r.status === 'fulfilled' && r.value) {
+        const { city, temp, unit } = r.value;
+        features.push({
+          type: 'Feature',
+          geometry: { type: 'Point', coordinates: [city.lon, city.lat] },
+          properties: { label: `${temp}°${unit}`, name: city.name }
+        });
+      }
+    });
+
+    if (map.getSource('temp-labels')) {
+      map.getSource('temp-labels').setData({
+        type: 'FeatureCollection',
+        features
+      });
+    }
+  }
+
+  // Refresh temp labels every 15 min
+  setInterval(fetchTempLabels, 900000);
 
   // ─── Fetch NWS Alerts ───────────────────────
   async function fetchAlerts() {
@@ -961,6 +1143,9 @@
         const tempOpacity = layers.radar ? 0.25 : 0.6;
         map.setPaintProperty('temperature-layer', 'raster-opacity', tempOpacity);
       }
+    }
+    if (map.getLayer('temp-labels-layer')) {
+      map.setLayoutProperty('temp-labels-layer', 'visibility', layers.temp ? 'visible' : 'none');
     }
     if (map.getLayer('satellite-layer')) {
       map.setLayoutProperty('satellite-layer', 'visibility', layers.satellite ? 'visible' : 'none');
@@ -1101,13 +1286,14 @@
   });
 
   // ─── Timeline (radar animation frames) ──────
+  // Slider: 0 = oldest (-50 min), 10 = now. Left-to-right = past-to-present.
   const timeSlider = document.getElementById('timeSlider');
   const timeLabel = document.getElementById('timeLabel');
   const playBtn = document.getElementById('playBtn');
   let playing = false;
   let playInterval;
 
-  // Iowa State Mesonet serves time-stamped radar tiles
+  // Iowa State Mesonet time-stamped radar tiles (index 0 = now, 10 = -50 min)
   const radarProducts = [
     'nexrad-n0q-900913',           // Now
     'nexrad-n0q-900913-m05m',      // 5 min ago
@@ -1122,23 +1308,26 @@
     'nexrad-n0q-900913-m50m',      // 50 min ago
   ];
 
-  timeSlider.max = radarProducts.length - 1;
+  // Slider value → radar product index (reverse: slider 0=oldest, 10=now)
+  function sliderToRadarIdx(sliderVal) {
+    return radarProducts.length - 1 - sliderVal;
+  }
 
   timeSlider.addEventListener('input', () => {
-    const idx = parseInt(timeSlider.value);
-    updateRadarFrame(idx);
+    const sliderVal = parseInt(timeSlider.value);
+    updateRadarFrame(sliderToRadarIdx(sliderVal));
   });
 
-  function updateRadarFrame(idx) {
+  function updateRadarFrame(radarIdx) {
     if (!map.getSource('radar')) return;
-    const product = radarProducts[idx];
+    const product = radarProducts[radarIdx];
     map.getSource('radar').setTiles([
       `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/${product}/{z}/{x}/{y}.png`
     ]);
-    if (idx === 0) {
+    if (radarIdx === 0) {
       timeLabel.textContent = 'Now';
     } else {
-      timeLabel.textContent = `-${idx * 5} min`;
+      timeLabel.textContent = `-${radarIdx * 5} min`;
     }
   }
 
@@ -1146,17 +1335,16 @@
     playing = !playing;
     if (playing) {
       playBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="3" width="4" height="18"/><rect x="15" y="3" width="4" height="18"/></svg>';
-      let frame = parseInt(timeSlider.value);
-      // Play from oldest to newest
-      frame = radarProducts.length - 1;
+      // Start from oldest (left), play right toward now
+      let frame = 0;
       timeSlider.value = frame;
-      updateRadarFrame(frame);
+      updateRadarFrame(sliderToRadarIdx(frame));
 
       playInterval = setInterval(() => {
-        frame--;
-        if (frame < 0) frame = radarProducts.length - 1;
+        frame++;
+        if (frame > radarProducts.length - 1) frame = 0;
         timeSlider.value = frame;
-        updateRadarFrame(frame);
+        updateRadarFrame(sliderToRadarIdx(frame));
       }, 500);
     } else {
       playBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>';
