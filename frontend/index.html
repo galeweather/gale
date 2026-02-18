@@ -771,14 +771,14 @@
     <span>Temp</span>
   </button>
 
-  <button class="layer-btn" data-layer="wind" title="Wind">
+  <button class="layer-btn active" data-layer="wind" title="Wind">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
       <path d="M9.59 4.59A2 2 0 1111 8H2"/><path d="M12.59 19.41A2 2 0 1014 16H2"/><path d="M17.73 7.73A2.5 2.5 0 1119.5 12H2"/>
     </svg>
     <span>Wind</span>
   </button>
 
-  <button class="layer-btn" data-layer="precip" title="Precipitation">
+  <button class="layer-btn active" data-layer="precip" title="Precipitation">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
       <path d="M12 2.69l5.66 5.66a8 8 0 11-11.31 0z"/>
     </svg>
@@ -936,10 +936,11 @@
     zoom: 6,
     maxZoom: 12,
     minZoom: 2,
+    pitch: 45,
     attributionControl: true
   });
 
-  map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
+  map.addControl(new maplibregl.NavigationControl({ showCompass: true }), 'bottom-right');
 
   // ─── Tile Base URL (Cloudflare R2) ────────────
   const TILE_BASE = 'https://pub-9975b1cfcbf9480f9e1333c7e208a6ce.r2.dev';
@@ -948,8 +949,8 @@
   const layers = {
     radar: true,
     temp: true,
-    wind: false,
-    precip: false,
+    wind: true,
+    precip: true,
     satellite: false,
     alerts: false
   };
@@ -973,7 +974,7 @@
       type: 'raster',
       source: 'temperature',
       paint: {
-        'raster-opacity': 0.25,
+        'raster-opacity': 0.3,
         'raster-fade-duration': 300
       }
     });
@@ -995,10 +996,9 @@
       type: 'raster',
       source: 'wind',
       paint: {
-        'raster-opacity': 0.25,
+        'raster-opacity': 0.5,
         'raster-fade-duration': 300
-      },
-      layout: { visibility: 'none' }
+      }
     });
 
     // HRRR Precipitation — Cloudflare R2 tiles
@@ -1018,10 +1018,9 @@
       type: 'raster',
       source: 'precipitation',
       paint: {
-        'raster-opacity': 0.25,
+        'raster-opacity': 0.5,
         'raster-fade-duration': 300
-      },
-      layout: { visibility: 'none' }
+      }
     });
 
     // MRMS Radar — Iowa State Mesonet (renders on top of temperature/wind/precip)
@@ -1575,7 +1574,7 @@
     if (map.getLayer('temperature-layer')) {
       map.setLayoutProperty('temperature-layer', 'visibility', layers.temp ? 'visible' : 'none');
       if (layers.temp) {
-        const tempOpacity = layers.radar ? 0.25 : 0.6;
+        const tempOpacity = layers.radar ? 0.3 : 0.6;
         map.setPaintProperty('temperature-layer', 'raster-opacity', tempOpacity);
       }
     }
@@ -1585,14 +1584,14 @@
     if (map.getLayer('wind-layer')) {
       map.setLayoutProperty('wind-layer', 'visibility', layers.wind ? 'visible' : 'none');
       if (layers.wind) {
-        const windOpacity = layers.radar ? 0.25 : 0.6;
+        const windOpacity = layers.radar ? 0.5 : 0.7;
         map.setPaintProperty('wind-layer', 'raster-opacity', windOpacity);
       }
     }
     if (map.getLayer('precipitation-layer')) {
       map.setLayoutProperty('precipitation-layer', 'visibility', layers.precip ? 'visible' : 'none');
       if (layers.precip) {
-        const precipOpacity = layers.radar ? 0.25 : 0.6;
+        const precipOpacity = layers.radar ? 0.5 : 0.7;
         map.setPaintProperty('precipitation-layer', 'raster-opacity', precipOpacity);
       }
     }
