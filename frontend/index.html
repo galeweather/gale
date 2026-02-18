@@ -801,14 +801,121 @@
     .legend { left: 10px; bottom: 66px; }
     .freshness { bottom: 66px; right: 10px; }
   }
+
+  /* ═══════════════════════════════════════════
+     ACCESSIBILITY
+     ═══════════════════════════════════════════ */
+  .skip-link {
+    position: fixed;
+    top: -100px;
+    left: 16px;
+    z-index: 9999;
+    padding: 8px 16px;
+    background: var(--accent);
+    color: var(--bg-primary);
+    font-family: var(--font);
+    font-size: 14px;
+    font-weight: 600;
+    border-radius: var(--radius-sm);
+    text-decoration: none;
+    transition: top 0.2s;
+  }
+  .skip-link:focus {
+    top: 16px;
+    outline: none;
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+  .layer-btn:focus-visible,
+  .timeline-play:focus-visible,
+  .layers-toggle:focus-visible,
+  .locate-inline:focus-visible,
+  .forecast-close:focus-visible,
+  .search-close:focus-visible,
+  .palette-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px var(--accent-dim);
+  }
+  .search-input:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-dim);
+  }
+  .timeline-slider:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 4px;
+  }
+  .logo-location:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  /* ═══════════════════════════════════════════
+     COLORBLIND PALETTE PICKER
+     ═══════════════════════════════════════════ */
+  .palette-picker {
+    display: none;
+    flex-direction: row;
+    gap: 6px;
+    margin-top: 6px;
+  }
+  .legend.show-palette .palette-picker {
+    display: flex;
+  }
+  .legend.show-palette {
+    pointer-events: auto;
+  }
+  .palette-btn {
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: 2px solid transparent;
+    border-radius: 4px;
+    cursor: pointer;
+    background: transparent;
+    transition: border-color var(--transition);
+  }
+  .palette-btn.active {
+    border-color: var(--accent);
+  }
+  .palette-btn:hover {
+    border-color: var(--text-secondary);
+  }
+  .palette-swatch {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: 2px;
+  }
 </style>
 </head>
 <body>
+<a href="#map" class="skip-link">Skip to map</a>
 
 <!-- ════════════════════════════════════════════
      MAP
      ════════════════════════════════════════════ -->
-<div id="map"></div>
+<div id="map" role="application" aria-label="Interactive weather map"></div>
 
 <!-- ════════════════════════════════════════════
      TOP BAR
@@ -823,7 +930,7 @@
     <span class="logo-text">Gale</span>
     <span class="logo-badge" id="logoBadge">Alpha</span>
     <div class="logo-divider"></div>
-    <div class="logo-location" id="locationToggle" title="Search or locate">
+    <div class="logo-location" id="locationToggle" title="Search or locate" role="button" tabindex="0" aria-label="Open search" aria-expanded="false">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <circle cx="12" cy="12" r="3"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/>
       </svg>
@@ -831,7 +938,7 @@
     </div>
   </div>
 
-  <button class="locate-inline" id="locateBtn" title="My location">
+  <button class="locate-inline" id="locateBtn" title="My location" aria-label="Locate me on the map">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <circle cx="12" cy="12" r="3"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/>
     </svg>
@@ -841,16 +948,16 @@
     <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/>
     </svg>
-    <input class="search-input" type="text" placeholder="Search city or address..." id="searchInput" autocomplete="off">
-    <button class="search-close" id="searchClose" title="Close search">
+    <input class="search-input" type="text" placeholder="Search city or address..." id="searchInput" autocomplete="off" aria-label="Search for a city or address" aria-autocomplete="list" aria-expanded="false" aria-controls="searchResults" role="combobox">
+    <button class="search-close" id="searchClose" title="Close search" aria-label="Close search">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M18 6L6 18M6 6l12 12"/>
       </svg>
     </button>
-    <div class="search-results" id="searchResults"></div>
+    <div class="search-results" id="searchResults" role="listbox" aria-label="Search results"></div>
   </div>
 
-  <button class="layers-toggle" id="layersToggle" title="Layers">
+  <button class="layers-toggle" id="layersToggle" title="Layers" aria-label="Toggle layer controls" aria-expanded="false">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <polygon points="12 2 2 7 12 12 22 7 12 2"/>
       <polyline points="2 17 12 22 22 17"/>
@@ -862,36 +969,36 @@
 <!-- ════════════════════════════════════════════
      LAYER SIDEBAR
      ════════════════════════════════════════════ -->
-<div class="sidebar">
-  <button class="layer-btn active" data-layer="radar" title="Radar">
+<div class="sidebar" role="toolbar" aria-label="Map layers">
+  <button class="layer-btn active" data-layer="radar" title="Radar" aria-label="Toggle radar layer" aria-pressed="true">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
       <circle cx="12" cy="12" r="3"/><path d="M6.3 6.3a9 9 0 000 12.73"/><path d="M17.7 6.3a9 9 0 010 12.73"/>
     </svg>
     <span>Radar</span>
   </button>
 
-  <button class="layer-btn active" data-layer="temp" title="Temperature">
+  <button class="layer-btn active" data-layer="temp" title="Temperature" aria-label="Toggle temperature layer" aria-pressed="true">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
       <path d="M12 9V2m0 0L9 5m3-3l3 3"/><path d="M12 15v7m0 0l3-3m-3 3l-3-3"/><circle cx="12" cy="12" r="3"/>
     </svg>
     <span>Temp</span>
   </button>
 
-  <button class="layer-btn active" data-layer="wind" title="Wind">
+  <button class="layer-btn active" data-layer="wind" title="Wind" aria-label="Toggle wind layer" aria-pressed="true">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
       <path d="M9.59 4.59A2 2 0 1111 8H2"/><path d="M12.59 19.41A2 2 0 1014 16H2"/><path d="M17.73 7.73A2.5 2.5 0 1119.5 12H2"/>
     </svg>
     <span>Wind</span>
   </button>
 
-  <button class="layer-btn active" data-layer="precip" title="Precipitation">
+  <button class="layer-btn active" data-layer="precip" title="Precipitation" aria-label="Toggle precipitation layer" aria-pressed="true">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
       <path d="M12 2.69l5.66 5.66a8 8 0 11-11.31 0z"/>
     </svg>
     <span>Precip</span>
   </button>
 
-  <button class="layer-btn" data-layer="satellite" title="Satellite">
+  <button class="layer-btn" data-layer="satellite" title="Satellite" aria-label="Toggle satellite layer" aria-pressed="false">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
       <circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><ellipse cx="12" cy="12" rx="4" ry="10"/>
     </svg>
@@ -900,7 +1007,7 @@
 
   <div class="layer-divider"></div>
 
-  <button class="layer-btn" data-layer="alerts" title="NWS Alerts">
+  <button class="layer-btn" data-layer="alerts" title="NWS Alerts" aria-label="Toggle alerts layer" aria-pressed="false">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
       <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
     </svg>
@@ -909,7 +1016,7 @@
 
   <div class="layer-divider"></div>
 
-  <button class="layer-btn active" id="viewToggle" title="Toggle 3D / 2D view (V)">
+  <button class="layer-btn active" id="viewToggle" title="Toggle 3D / 2D view (V)" aria-label="Toggle 3D view" aria-pressed="true">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
       <path d="M12 3L2 9l10 6 10-6-10-6z"/><path d="M2 15l10 6 10-6"/><path d="M2 12l10 6 10-6"/>
     </svg>
@@ -927,6 +1034,20 @@
       <span id="legendMin">-40°F</span>
       <span id="legendMax">120°F</span>
     </div>
+    <div class="palette-picker" id="palettePicker" role="radiogroup" aria-label="Radar color palette">
+      <button class="palette-btn active" data-palette="standard" aria-label="Standard colors" aria-pressed="true">
+        <span class="palette-swatch" style="background: linear-gradient(135deg, #00ff00, #ff0000)"></span>
+      </button>
+      <button class="palette-btn" data-palette="deuteranopia" aria-label="Blue-Orange palette for red-green color blindness" aria-pressed="false">
+        <span class="palette-swatch" style="background: linear-gradient(135deg, #0088ff, #ff8800)"></span>
+      </button>
+      <button class="palette-btn" data-palette="protanopia" aria-label="Yellow-Purple palette for red color blindness" aria-pressed="false">
+        <span class="palette-swatch" style="background: linear-gradient(135deg, #ffff00, #9900ff)"></span>
+      </button>
+      <button class="palette-btn" data-palette="highContrast" aria-label="High contrast palette for low vision" aria-pressed="false">
+        <span class="palette-swatch" style="background: linear-gradient(135deg, #ffffff, #000000)"></span>
+      </button>
+    </div>
   </div>
 </div>
 
@@ -935,17 +1056,18 @@
 <!-- ════════════════════════════════════════════
      FRESHNESS
      ════════════════════════════════════════════ -->
-<div class="freshness">
+<div class="freshness" aria-live="polite" aria-atomic="true">
   <div class="freshness-dot"></div>
   <span id="freshnessText">MRMS 2 min</span>
 </div>
+<div class="sr-only" id="srAnnounce" aria-live="polite" aria-atomic="true"></div>
 
 <!-- ════════════════════════════════════════════
      TIMELINE
      ════════════════════════════════════════════ -->
 <div class="timeline-bar">
   <div class="timeline-inner">
-    <button class="timeline-play" id="playBtn" title="Play animation">
+    <button class="timeline-play" id="playBtn" title="Play animation" aria-label="Play radar animation" aria-pressed="false">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
         <polygon points="5,3 19,12 5,21"/>
       </svg>
@@ -953,7 +1075,7 @@
     <div class="timeline-track">
       <div class="timeline-track-row">
         <div class="timeline-past">
-          <input class="timeline-slider" type="range" min="0" max="10" value="10" id="timeSlider">
+          <input class="timeline-slider" type="range" min="0" max="10" value="10" id="timeSlider" aria-label="Radar timeline" aria-valuetext="Now">
           <div class="timeline-label" id="timeLabel">Now</div>
         </div>
         <div class="timeline-now"></div>
@@ -976,13 +1098,13 @@
 <!-- ════════════════════════════════════════════
      POINT FORECAST DRAWER
      ════════════════════════════════════════════ -->
-<div class="forecast-drawer" id="forecastDrawer">
+<div class="forecast-drawer" id="forecastDrawer" role="dialog" aria-label="Point forecast" aria-hidden="true">
   <div class="forecast-header">
     <div>
       <div class="forecast-location" id="forecastLocation">—</div>
       <div class="forecast-coords" id="forecastCoords">—</div>
     </div>
-    <button class="forecast-close" id="forecastClose">✕</button>
+    <button class="forecast-close" id="forecastClose" aria-label="Close forecast panel">✕</button>
   </div>
   <div class="forecast-temp-hero" id="forecastTemp">—<span>°F</span></div>
   <div class="forecast-condition" id="forecastCondition">Tap anywhere on the map</div>
@@ -1053,6 +1175,11 @@
   // ─── Tile Base URL (Cloudflare R2) ────────────
   const TILE_BASE = 'https://pub-9975b1cfcbf9480f9e1333c7e208a6ce.r2.dev';
 
+  // ─── HRRR Crossfade State ───────────────────
+  let currentTempSourceId = 'temperature-tiles';
+  let currentTempLayerId = 'temperature-layer';
+  let hrrrSwapGen = 0;
+
   // ─── Layer State ────────────────────────────
   const layers = {
     radar: true,
@@ -1062,6 +1189,12 @@
     satellite: false,
     alerts: false
   };
+
+  // ─── Screen Reader Announcements ─────────────────
+  function announce(text) {
+    const el = document.getElementById('srAnnounce');
+    if (el) { el.textContent = ''; requestAnimationFrame(() => { el.textContent = text; }); }
+  }
 
   // ─── Wind Particle System (WebGL) ─────────────────
   const PARTICLE_RES = window.innerWidth < 640 ? 128 : 256;
@@ -1885,6 +2018,11 @@
     fetchAlerts();
 
     updateLayerVisibility();
+
+    // Apply stored radar palette on load
+    if (currentRadarPalette !== 'standard') {
+      applyRadarPalette(currentRadarPalette);
+    }
   });
 
   // ─── Temperature Labels (sampled from tile pixels) ───
@@ -2230,6 +2368,57 @@
     return Date.UTC(yr, mo, dy, h + 1, 22, 0);
   }
 
+  function crossfadeTemperature(ts) {
+    const gen = ++hrrrSwapGen;
+    const oldSourceId = currentTempSourceId;
+    const oldLayerId = currentTempLayerId;
+    const newSourceId = `temperature-tiles-${gen}`;
+    const newLayerId = `temperature-layer-${gen}`;
+
+    // Add new source with cache-busted URL
+    map.addSource(newSourceId, {
+      type: 'raster',
+      tiles: [`${TILE_BASE}/temperature/{z}/{x}/{y}.png?_=${ts}`],
+      tileSize: 256,
+      maxzoom: 6
+    });
+
+    // Determine target opacity
+    const targetOpacity = layers.radar ? 0.25 : 0.7;
+
+    // Add new layer at opacity 0, positioned below radar
+    map.addLayer({
+      id: newLayerId,
+      type: 'raster',
+      source: newSourceId,
+      paint: {
+        'raster-opacity': 0,
+        'raster-fade-duration': 0
+      },
+      layout: { visibility: layers.temp ? 'visible' : 'none' }
+    }, 'radar-layer');
+
+    // Update tracked IDs immediately
+    currentTempSourceId = newSourceId;
+    currentTempLayerId = newLayerId;
+
+    // Once tiles load, crossfade
+    map.once('idle', () => {
+      if (hrrrSwapGen !== gen) return; // superseded
+      // Fade new in
+      map.setPaintProperty(newLayerId, 'raster-opacity', targetOpacity);
+      // Fade old out
+      if (map.getLayer(oldLayerId)) {
+        map.setPaintProperty(oldLayerId, 'raster-opacity', 0);
+      }
+      // Clean up old after transition
+      setTimeout(() => {
+        if (map.getLayer(oldLayerId)) map.removeLayer(oldLayerId);
+        if (map.getSource(oldSourceId)) map.removeSource(oldSourceId);
+      }, 800);
+    });
+  }
+
   async function checkTempFreshness() {
     // Smart skip: don't hit the network if no new HRRR run can exist yet
     if (Date.now() < nextHrrrAvailable()) return;
@@ -2252,11 +2441,8 @@
         }
         // Clear in-memory pixel-sampling cache
         Object.keys(tileCache).forEach(k => delete tileCache[k]);
-        // Bust temperature raster tile cache
-        if (map.getSource('temperature-tiles')) {
-          const ts = Date.now();
-          map.getSource('temperature-tiles').setTiles([`${TILE_BASE}/temperature/{z}/{x}/{y}.png?_=${ts}`]);
-        }
+        // Crossfade temperature raster tiles
+        crossfadeTemperature(Date.now());
         // Reload wind particle textures
         if (windParticleLayer && windParticleLayer.reloadWind) windParticleLayer.reloadWind();
         setTimeout(updateAllLabels, 1000);
@@ -2284,11 +2470,11 @@
       map.setLayoutProperty('alerts-line', 'visibility', layers.alerts ? 'visible' : 'none');
     }
 
-    // Temperature raster overlay
-    if (map.getLayer('temperature-layer')) {
-      map.setLayoutProperty('temperature-layer', 'visibility', layers.temp ? 'visible' : 'none');
+    // Temperature raster overlay (uses tracked IDs for crossfade)
+    if (map.getLayer(currentTempLayerId)) {
+      map.setLayoutProperty(currentTempLayerId, 'visibility', layers.temp ? 'visible' : 'none');
       if (layers.temp) {
-        map.setPaintProperty('temperature-layer', 'raster-opacity', layers.radar ? 0.25 : 0.7);
+        map.setPaintProperty(currentTempLayerId, 'raster-opacity', layers.radar ? 0.25 : 0.7);
       }
     }
 
@@ -2311,32 +2497,95 @@
     if (layers.wind) { updateWindLabels(); map.triggerRepaint(); }
     if (layers.precip) updatePrecipLabels();
 
-    // Legend: radar takes priority, then temp
+    // Legend: radar takes priority, then precip, then wind, then temp
     const legend = document.getElementById('legend');
     const grad = document.getElementById('legendGradient');
     const lMin = document.getElementById('legendMin');
     const lMax = document.getElementById('legendMax');
 
     if (layers.radar) {
-      legend.classList.add('visible');
+      legend.classList.add('visible', 'show-palette');
       grad.className = 'legend-gradient radar';
+      grad.style.background = RADAR_PALETTES[currentRadarPalette].gradient;
       lMin.textContent = 'Light';
       lMax.textContent = 'Heavy';
+    } else if (layers.precip) {
+      legend.classList.add('visible');
+      legend.classList.remove('show-palette');
+      grad.className = 'legend-gradient';
+      grad.style.background = 'linear-gradient(to right, #aadcaa, #64c864, #32b432, #3296ff, #1e64e6, #c8c832, #e68232, #c81e32)';
+      lMin.textContent = 'Trace';
+      lMax.textContent = '2"+';
+    } else if (layers.wind) {
+      legend.classList.add('visible');
+      legend.classList.remove('show-palette');
+      grad.className = 'legend-gradient';
+      grad.style.background = 'linear-gradient(to right, #c8e6ff, #64b4ff, #3278e6, #32c864, #e6e632, #e69632, #e65032, #c81e1e, #960050)';
+      lMin.textContent = '0 mph';
+      lMax.textContent = '90 mph';
     } else if (layers.temp) {
       legend.classList.add('visible');
+      legend.classList.remove('show-palette');
       grad.className = 'legend-gradient temp';
+      grad.style.background = '';
       lMin.textContent = '-40°F';
       lMax.textContent = '120°F';
     } else {
-      legend.classList.remove('visible');
+      legend.classList.remove('visible', 'show-palette');
+      grad.style.background = '';
     }
   }
+
+  // ─── Colorblind Radar Palettes ─────────────────
+  const RADAR_PALETTES = {
+    standard:     { hueRotate: 0,   saturation: 0,    contrast: 0,   label: 'Standard',      gradient: 'linear-gradient(to right, #00000000, #00ff00, #ffff00, #ff8800, #ff0000, #ff00ff)' },
+    deuteranopia: { hueRotate: 90,  saturation: 0.2,  contrast: 0,   label: 'Blue-Orange',   gradient: 'linear-gradient(to right, #00000000, #0088ff, #88ccff, #ffcc00, #ff8800, #ff00ff)' },
+    protanopia:   { hueRotate: 180, saturation: 0.1,  contrast: 0,   label: 'Yellow-Purple', gradient: 'linear-gradient(to right, #00000000, #ff00ff, #8800ff, #0088ff, #00ffff, #00ff00)' },
+    highContrast: { hueRotate: 0,   saturation: 0.5,  contrast: 0.3, label: 'High Contrast', gradient: 'linear-gradient(to right, #00000000, #00ff00, #ffff00, #ff8800, #ff0000, #ff00ff)' }
+  };
+
+  let currentRadarPalette = localStorage.getItem('gale_radar_palette') || 'standard';
+
+  function applyRadarPalette(key) {
+    const p = RADAR_PALETTES[key];
+    if (!p) return;
+    currentRadarPalette = key;
+    localStorage.setItem('gale_radar_palette', key);
+
+    if (map.getLayer('radar-layer')) {
+      map.setPaintProperty('radar-layer', 'raster-hue-rotate', p.hueRotate);
+      map.setPaintProperty('radar-layer', 'raster-saturation', p.saturation);
+      map.setPaintProperty('radar-layer', 'raster-contrast', p.contrast);
+    }
+
+    // Update active button state
+    document.querySelectorAll('.palette-btn').forEach(btn => {
+      const isActive = btn.dataset.palette === key;
+      btn.classList.toggle('active', isActive);
+      btn.setAttribute('aria-pressed', String(isActive));
+    });
+
+    // Update legend gradient when radar is active
+    if (layers.radar) {
+      document.getElementById('legendGradient').style.background = p.gradient;
+    }
+
+    announce(`Radar palette: ${p.label}`);
+  }
+
+  document.querySelectorAll('.palette-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      applyRadarPalette(btn.dataset.palette);
+    });
+  });
 
   document.querySelectorAll('.layer-btn[data-layer]').forEach(btn => {
     btn.addEventListener('click', () => {
       const layer = btn.dataset.layer;
       layers[layer] = !layers[layer];
       btn.classList.toggle('active', layers[layer]);
+      btn.setAttribute('aria-pressed', String(layers[layer]));
+      announce(`${btn.querySelector('span').textContent} layer ${layers[layer] ? 'on' : 'off'}`);
       updateLayerVisibility();
     });
   });
@@ -2350,6 +2599,9 @@
     map.easeTo({ pitch: is3D ? 45 : 0, duration: 600 });
     viewToggle.classList.toggle('active', is3D);
     viewToggle.querySelector('span').textContent = is3D ? '3D' : '2D';
+    viewToggle.setAttribute('aria-pressed', String(is3D));
+    viewToggle.setAttribute('aria-label', is3D ? 'Switch to 2D view' : 'Switch to 3D view');
+    announce(`${is3D ? '3D' : '2D'} view`);
   }
 
   viewToggle.addEventListener('click', toggleView);
@@ -2362,6 +2614,7 @@
     e.stopPropagation();
     sidebar.classList.toggle('open');
     layersToggle.classList.toggle('active');
+    layersToggle.setAttribute('aria-expanded', String(sidebar.classList.contains('open')));
   });
 
   // ─── Recent Locations Cache ─────────────────
@@ -2387,6 +2640,7 @@
     recents.forEach(r => {
       const item = document.createElement('div');
       item.className = 'search-result-item';
+      item.setAttribute('role', 'option');
       item.textContent = r.name;
       item.addEventListener('click', () => {
         map.flyTo({ center: [r.lon, r.lat], zoom: 8, duration: 1500 });
@@ -2399,6 +2653,7 @@
       searchResults.appendChild(item);
     });
     searchResults.classList.add('active');
+    searchInput.setAttribute('aria-expanded', 'true');
   }
 
   // ─── Search (Nominatim) ─────────────────────
@@ -2427,6 +2682,7 @@
         results.forEach(r => {
           const item = document.createElement('div');
           item.className = 'search-result-item';
+          item.setAttribute('role', 'option');
           item.textContent = r.display_name;
           item.addEventListener('click', () => {
             const lat = parseFloat(r.lat), lon = parseFloat(r.lon);
@@ -2441,6 +2697,7 @@
           searchResults.appendChild(item);
         });
         searchResults.classList.add('active');
+        searchInput.setAttribute('aria-expanded', 'true');
       } catch (e) { console.warn('Search error:', e); }
     }, 350);
   });
@@ -2474,6 +2731,7 @@
     document.getElementById('fDewpoint').textContent = '—';
     document.getElementById('fPrecip').textContent = '—';
     drawer.classList.add('open');
+    drawer.setAttribute('aria-hidden', 'false');
 
     // Phase 1: Instant HRRR tile sampling (parallel, <200ms)
     const [tempF, windMph, precipIn] = await Promise.all([
@@ -2533,6 +2791,7 @@
 
   document.getElementById('forecastClose').addEventListener('click', () => {
     drawer.classList.remove('open');
+    drawer.setAttribute('aria-hidden', 'true');
   });
 
   // ─── Timeline (radar animation frames) ──────
@@ -2588,13 +2847,18 @@
     ]);
     if (radarIdx === 0) {
       timeLabel.textContent = 'Now';
+      timeSlider.setAttribute('aria-valuetext', 'Now');
     } else {
+      const text = `${radarIdx * 5} minutes ago`;
       timeLabel.textContent = `-${radarIdx * 5} min`;
+      timeSlider.setAttribute('aria-valuetext', text);
     }
   }
 
   playBtn.addEventListener('click', () => {
     playing = !playing;
+    playBtn.setAttribute('aria-pressed', String(playing));
+    playBtn.setAttribute('aria-label', playing ? 'Pause radar animation' : 'Play radar animation');
     if (playing) {
       playBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="3" width="4" height="18"/><rect x="15" y="3" width="4" height="18"/></svg>';
       // Start from oldest (left), play right toward now
@@ -2626,6 +2890,8 @@
     locateBtn.classList.add('visible');
     logoBadge.style.display = 'none';
     document.querySelector('.logo').classList.add('search-active');
+    locationToggle.setAttribute('aria-expanded', 'true');
+    searchInput.setAttribute('aria-expanded', 'false');
     searchInput.focus();
     if (!searchInput.value.trim()) showRecentLocations();
   }
@@ -2636,6 +2902,8 @@
     logoBadge.style.display = '';
     document.querySelector('.logo').classList.remove('search-active');
     searchResults.classList.remove('active');
+    locationToggle.setAttribute('aria-expanded', 'false');
+    searchInput.setAttribute('aria-expanded', 'false');
     searchInput.blur();
     searchInput.value = '';
   }
@@ -2645,6 +2913,13 @@
       closeSearch();
     } else {
       openSearch();
+    }
+  });
+
+  locationToggle.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      locationToggle.click();
     }
   });
 
@@ -2687,15 +2962,15 @@
     // Allow Escape from within search input to close search
     if (e.key === 'Escape' && e.target.tagName === 'INPUT') {
       closeSearch();
-      drawer.classList.remove('open');
+      drawer.classList.remove('open'); drawer.setAttribute('aria-hidden', 'true');
       sidebar.classList.remove('open');
-      layersToggle.classList.remove('active');
+      layersToggle.classList.remove('active'); layersToggle.setAttribute('aria-expanded', 'false');
       return;
     }
     if (e.target.tagName === 'INPUT') return;
     switch(e.key) {
       case '/': e.preventDefault(); openSearch(); break;
-      case 'Escape': closeSearch(); drawer.classList.remove('open'); sidebar.classList.remove('open'); layersToggle.classList.remove('active'); break;
+      case 'Escape': closeSearch(); drawer.classList.remove('open'); drawer.setAttribute('aria-hidden', 'true'); sidebar.classList.remove('open'); layersToggle.classList.remove('active'); layersToggle.setAttribute('aria-expanded', 'false'); break;
       case ' ': e.preventDefault(); playBtn.click(); break;
       case 'r': document.querySelector('[data-layer="radar"]').click(); break;
       case 't': document.querySelector('[data-layer="temp"]').click(); break;
