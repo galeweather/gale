@@ -1,9 +1,13 @@
 // Gale Service Worker — tile caching + offline support
-const CACHE = 'gale-tiles-v1';
+const CACHE = 'gale-tiles-v2';
 const R2 = 'pub-9975b1cfcbf9480f9e1333c7e208a6ce.r2.dev';
 
 self.addEventListener('install', () => self.skipWaiting());
-self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
+self.addEventListener('activate', (e) => e.waitUntil(
+  caches.keys().then(names =>
+    Promise.all(names.filter(n => n !== CACHE).map(n => caches.delete(n)))
+  ).then(() => self.clients.claim())
+));
 
 self.addEventListener('fetch', (event) => {
   if (!event.request.url.includes(R2)) return;

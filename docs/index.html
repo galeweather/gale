@@ -598,6 +598,14 @@
     background: linear-gradient(to right, #00000000, #00ff00, #ffff00, #ff8800, #ff0000, #ff00ff);
   }
 
+  .legend-gradient.wind {
+    background: linear-gradient(to right, #c8e6ff, #64b4ff, #3278e6, #32c864, #e6e632, #e69618, #e6501e, #c81e1e, #960050);
+  }
+
+  .legend-gradient.precip {
+    background: linear-gradient(to right, #aadcaa, #64c864, #32b432, #3296ff, #1e64e6, #c8c832, #e6821e, #c81e32);
+  }
+
   .legend-labels {
     display: flex;
     justify-content: space-between;
@@ -695,6 +703,20 @@
       <path d="M12 9V2m0 0L9 5m3-3l3 3"/><path d="M12 15v7m0 0l3-3m-3 3l-3-3"/><circle cx="12" cy="12" r="3"/>
     </svg>
     <span>Temp</span>
+  </button>
+
+  <button class="layer-btn" data-layer="wind" title="Wind">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+      <path d="M9.59 4.59A2 2 0 1111 8H2"/><path d="M12.59 19.41A2 2 0 1014 16H2"/><path d="M17.73 7.73A2.5 2.5 0 1119.5 12H2"/>
+    </svg>
+    <span>Wind</span>
+  </button>
+
+  <button class="layer-btn" data-layer="precip" title="Precipitation">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+      <path d="M12 2.69l5.66 5.66a8 8 0 11-11.31 0z"/>
+    </svg>
+    <span>Precip</span>
   </button>
 
   <button class="layer-btn" data-layer="satellite" title="Satellite">
@@ -860,6 +882,8 @@
   const layers = {
     radar: true,
     temp: true,
+    wind: false,
+    precip: false,
     satellite: false,
     alerts: false
   };
@@ -888,7 +912,53 @@
       }
     });
 
-    // MRMS Radar — Iowa State Mesonet (renders on top of temperature)
+    // HRRR Wind Speed — Cloudflare R2 tiles
+    map.addSource('wind', {
+      type: 'raster',
+      tiles: [
+        `${TILE_BASE}/wind/{z}/{x}/{y}.png`
+      ],
+      tileSize: 256,
+      minzoom: 2,
+      maxzoom: 6,
+      attribution: '&copy; NOAA HRRR via Gale'
+    });
+
+    map.addLayer({
+      id: 'wind-layer',
+      type: 'raster',
+      source: 'wind',
+      paint: {
+        'raster-opacity': 0.5,
+        'raster-fade-duration': 300
+      },
+      layout: { visibility: 'none' }
+    });
+
+    // HRRR Precipitation — Cloudflare R2 tiles
+    map.addSource('precipitation', {
+      type: 'raster',
+      tiles: [
+        `${TILE_BASE}/precipitation/{z}/{x}/{y}.png`
+      ],
+      tileSize: 256,
+      minzoom: 2,
+      maxzoom: 6,
+      attribution: '&copy; NOAA HRRR via Gale'
+    });
+
+    map.addLayer({
+      id: 'precipitation-layer',
+      type: 'raster',
+      source: 'precipitation',
+      paint: {
+        'raster-opacity': 0.5,
+        'raster-fade-duration': 300
+      },
+      layout: { visibility: 'none' }
+    });
+
+    // MRMS Radar — Iowa State Mesonet (renders on top of temperature/wind/precip)
     map.addSource('radar', {
       type: 'raster',
       tiles: [
@@ -1040,16 +1110,41 @@
     { c: 49,  r: 153, g: 27,  b: 27  },
   ];
 
-  function rgbToTempF(r, g, b) {
-    // Reverse GDAL's linear RGB interpolation between adjacent ramp entries.
-    // For each segment, solve for t from each channel and check consistency.
-    let bestTemp = null, bestError = Infinity;
+  // Wind speed ramp: m/s → RGBA (must match wind_ramp.txt)
+  const WIND_RAMP = [
+    { v: 0,  r: 0,   g: 0,   b: 0   },
+    { v: 1,  r: 200, g: 230, b: 255 },
+    { v: 5,  r: 100, g: 180, b: 255 },
+    { v: 10, r: 50,  g: 120, b: 230 },
+    { v: 15, r: 50,  g: 200, b: 100 },
+    { v: 20, r: 230, g: 230, b: 50  },
+    { v: 25, r: 230, g: 150, b: 30  },
+    { v: 30, r: 230, g: 80,  b: 30  },
+    { v: 35, r: 200, g: 30,  b: 30  },
+    { v: 40, r: 150, g: 0,   b: 80  },
+  ];
 
-    for (let i = 0; i < TEMP_RAMP.length - 1; i++) {
-      const a = TEMP_RAMP[i], n = TEMP_RAMP[i + 1];
+  // Precip ramp: mm → RGBA (must match precip_ramp.txt)
+  const PRECIP_RAMP = [
+    { v: 0,   r: 0,   g: 0,   b: 0   },
+    { v: 0.1, r: 170, g: 220, b: 170 },
+    { v: 1,   r: 100, g: 200, b: 100 },
+    { v: 5,   r: 50,  g: 180, b: 50  },
+    { v: 10,  r: 50,  g: 150, b: 255 },
+    { v: 15,  r: 30,  g: 100, b: 230 },
+    { v: 25,  r: 200, g: 200, b: 50  },
+    { v: 35,  r: 230, g: 130, b: 30  },
+    { v: 50,  r: 200, g: 30,  b: 50  },
+  ];
+
+  // Generic reverse-ramp: RGB pixel → physical value
+  function reverseRamp(r, g, b, ramp, valKey) {
+    let bestVal = null, bestError = Infinity;
+
+    for (let i = 0; i < ramp.length - 1; i++) {
+      const a = ramp[i], n = ramp[i + 1];
       const dr = n.r - a.r, dg = n.g - a.g, db = n.b - a.b;
 
-      // Compute t from each channel where there's meaningful change
       const tVals = [];
       if (Math.abs(dr) > 2) tVals.push((r - a.r) / dr);
       if (Math.abs(dg) > 2) tVals.push((g - a.g) / dg);
@@ -1066,21 +1161,35 @@
 
       if (error < bestError) {
         bestError = error;
-        bestTemp = a.c + t * (n.c - a.c);
+        bestVal = a[valKey] + t * (n[valKey] - a[valKey]);
       }
     }
 
-    // Fallback: closest single entry
-    if (bestTemp === null) {
+    if (bestVal === null) {
       let bestIdx = 0, bestDist = Infinity;
-      for (let i = 0; i < TEMP_RAMP.length; i++) {
-        const d = (r - TEMP_RAMP[i].r) ** 2 + (g - TEMP_RAMP[i].g) ** 2 + (b - TEMP_RAMP[i].b) ** 2;
+      for (let i = 0; i < ramp.length; i++) {
+        const d = (r - ramp[i].r) ** 2 + (g - ramp[i].g) ** 2 + (b - ramp[i].b) ** 2;
         if (d < bestDist) { bestDist = d; bestIdx = i; }
       }
-      bestTemp = TEMP_RAMP[bestIdx].c;
+      bestVal = ramp[bestIdx][valKey];
     }
 
-    return Math.round(bestTemp * 9 / 5 + 32);
+    return bestVal;
+  }
+
+  function rgbToTempF(r, g, b) {
+    const celsius = reverseRamp(r, g, b, TEMP_RAMP, 'c');
+    return Math.round(celsius * 9 / 5 + 32);
+  }
+
+  function rgbToWindMph(r, g, b) {
+    const ms = reverseRamp(r, g, b, WIND_RAMP, 'v');
+    return Math.round(ms * 2.237);
+  }
+
+  function rgbToPrecipIn(r, g, b) {
+    const mm = reverseRamp(r, g, b, PRECIP_RAMP, 'v');
+    return +(mm * 0.03937).toFixed(2);
   }
 
   // Tile pixel reading via offscreen canvas
@@ -1104,7 +1213,12 @@
     return { px: Math.floor(px), py: Math.floor(py) };
   }
 
-  function sampleTileAt(lng, lat) {
+  function sampleTileAt(lng, lat, layerName) {
+    const layerPath = layerName || 'temperature';
+    const converter = layerPath === 'wind' ? rgbToWindMph
+                    : layerPath === 'precipitation' ? rgbToPrecipIn
+                    : rgbToTempF;
+
     return new Promise((resolve) => {
       const z = Math.min(Math.floor(map.getZoom()), 6);
       if (z < 2) { resolve(null); return; }
@@ -1112,13 +1226,13 @@
       const { px, py } = lngLatToPixelInTile(lng, lat, z, x, y);
       if (px < 0 || px > 255 || py < 0 || py > 255) { resolve(null); return; }
 
-      const tileUrl = `${TILE_BASE}/temperature/${z}/${x}/${y}.png`;
+      const tileUrl = `${TILE_BASE}/${layerPath}/${z}/${x}/${y}.png`;
       const cached = tileCache[tileUrl];
       if (cached) {
         offCtx.clearRect(0, 0, 256, 256);
         offCtx.drawImage(cached, 0, 0);
         const d = offCtx.getImageData(px, py, 1, 1).data;
-        resolve(d[3] > 50 ? rgbToTempF(d[0], d[1], d[2]) : null);
+        resolve(d[3] > 50 ? converter(d[0], d[1], d[2]) : null);
         return;
       }
 
@@ -1129,7 +1243,7 @@
         offCtx.clearRect(0, 0, 256, 256);
         offCtx.drawImage(img, 0, 0);
         const d = offCtx.getImageData(px, py, 1, 1).data;
-        resolve(d[3] > 50 ? rgbToTempF(d[0], d[1], d[2]) : null);
+        resolve(d[3] > 50 ? converter(d[0], d[1], d[2]) : null);
       };
       img.onerror = () => resolve(null);
       img.src = tileUrl;
@@ -1151,7 +1265,7 @@
       for (let col = 0.5; col < 4; col++) {
         const lng = west + col * lngStep;
         const lat = south + row * latStep;
-        promises.push(sampleTileAt(lng, lat).then(tempF => {
+        promises.push(sampleTileAt(lng, lat, 'temperature').then(tempF => {
           if (tempF !== null) {
             features.push({
               type: 'Feature',
@@ -1246,12 +1360,14 @@
         }
         // Clear in-memory pixel-sampling cache
         Object.keys(tileCache).forEach(k => delete tileCache[k]);
-        if (map.getSource('temperature')) {
-          const ts = Date.now();
-          map.getSource('temperature').setTiles([
-            `${TILE_BASE}/temperature/{z}/{x}/{y}.png?_=${ts}`
-          ]);
-        }
+        const ts = Date.now();
+        ['temperature', 'wind', 'precipitation'].forEach(src => {
+          if (map.getSource(src)) {
+            map.getSource(src).setTiles([
+              `${TILE_BASE}/${src}/{z}/{x}/{y}.png?_=${ts}`
+            ]);
+          }
+        });
         setTimeout(updateTempLabels, 1000);
         document.getElementById('freshnessText').textContent =
           `HRRR ${meta.hrrr_hour}Z · MRMS live`;
@@ -1270,7 +1386,6 @@
     }
     if (map.getLayer('temperature-layer')) {
       map.setLayoutProperty('temperature-layer', 'visibility', layers.temp ? 'visible' : 'none');
-      // Temp as subtle base wash when radar is also on, full opacity when solo
       if (layers.temp) {
         const tempOpacity = layers.radar ? 0.25 : 0.6;
         map.setPaintProperty('temperature-layer', 'raster-opacity', tempOpacity);
@@ -1278,6 +1393,20 @@
     }
     if (map.getLayer('temp-labels-layer')) {
       map.setLayoutProperty('temp-labels-layer', 'visibility', layers.temp ? 'visible' : 'none');
+    }
+    if (map.getLayer('wind-layer')) {
+      map.setLayoutProperty('wind-layer', 'visibility', layers.wind ? 'visible' : 'none');
+      if (layers.wind) {
+        const windOpacity = layers.radar ? 0.3 : 0.5;
+        map.setPaintProperty('wind-layer', 'raster-opacity', windOpacity);
+      }
+    }
+    if (map.getLayer('precipitation-layer')) {
+      map.setLayoutProperty('precipitation-layer', 'visibility', layers.precip ? 'visible' : 'none');
+      if (layers.precip) {
+        const precipOpacity = layers.radar ? 0.3 : 0.5;
+        map.setPaintProperty('precipitation-layer', 'raster-opacity', precipOpacity);
+      }
     }
     if (map.getLayer('satellite-layer')) {
       map.setLayoutProperty('satellite-layer', 'visibility', layers.satellite ? 'visible' : 'none');
@@ -1287,7 +1416,7 @@
       map.setLayoutProperty('alerts-line', 'visibility', layers.alerts ? 'visible' : 'none');
     }
 
-    // Legend
+    // Legend priority: radar > precip > wind > temp
     const legend = document.getElementById('legend');
     const grad = document.getElementById('legendGradient');
     const lMin = document.getElementById('legendMin');
@@ -1298,6 +1427,16 @@
       grad.className = 'legend-gradient radar';
       lMin.textContent = 'Light';
       lMax.textContent = 'Heavy';
+    } else if (layers.precip) {
+      legend.classList.add('visible');
+      grad.className = 'legend-gradient precip';
+      lMin.textContent = '0 in';
+      lMax.textContent = '2 in';
+    } else if (layers.wind) {
+      legend.classList.add('visible');
+      grad.className = 'legend-gradient wind';
+      lMin.textContent = '0 mph';
+      lMax.textContent = '90 mph';
     } else if (layers.temp) {
       legend.classList.add('visible');
       grad.className = 'legend-gradient temp';
@@ -1361,55 +1500,73 @@
 
   map.on('click', async (e) => {
     const { lng, lat } = e.lngLat;
-    
+
     // Only fetch forecast for CONUS
     if (lat < 24 || lat > 50 || lng < -125 || lng > -66) return;
 
     document.getElementById('forecastLocation').textContent = 'Loading...';
     document.getElementById('forecastCoords').textContent = `${lat.toFixed(4)}°N, ${Math.abs(lng).toFixed(4)}°W`;
     document.getElementById('forecastTemp').innerHTML = '—<span>°F</span>';
-    document.getElementById('forecastCondition').textContent = 'Fetching forecast...';
+    document.getElementById('forecastCondition').textContent = 'Sampling HRRR tiles...';
     document.getElementById('fWind').textContent = '—';
     document.getElementById('fHumidity').textContent = '—';
     document.getElementById('fDewpoint').textContent = '—';
     document.getElementById('fPrecip').textContent = '—';
     drawer.classList.add('open');
 
+    // Phase 1: Instant HRRR tile sampling (parallel, <200ms)
+    const [tempF, windMph, precipIn] = await Promise.all([
+      sampleTileAt(lng, lat, 'temperature'),
+      sampleTileAt(lng, lat, 'wind'),
+      sampleTileAt(lng, lat, 'precipitation')
+    ]);
+
+    if (tempF !== null) {
+      document.getElementById('forecastTemp').innerHTML = `${tempF}<span>°F</span>`;
+    }
+    if (windMph !== null) {
+      document.getElementById('fWind').textContent = `${windMph} mph`;
+    }
+    if (precipIn !== null) {
+      document.getElementById('fPrecip').textContent = precipIn > 0 ? `${precipIn} in` : 'None';
+    }
+    document.getElementById('forecastCondition').textContent = 'HRRR data · fetching NWS details...';
+
+    // Phase 2: Async NWS API (2-5s, fills in city name + supplemental data)
     try {
-      // Step 1: Get grid point from NWS
       const pointResp = await fetch(`https://api.weather.gov/points/${lat.toFixed(4)},${lng.toFixed(4)}`, {
         headers: { 'User-Agent': 'Gale Weather (galeweather.com)' }
       });
       const pointData = await pointResp.json();
 
-      if (!pointData.properties?.forecast) {
-        document.getElementById('forecastLocation').textContent = 'No forecast available';
-        document.getElementById('forecastCondition').textContent = 'NWS coverage may not include this area';
+      const city = pointData.properties?.relativeLocation?.properties;
+      const locName = city ? `${city.city}, ${city.state}` : `${lat.toFixed(2)}°N`;
+      document.getElementById('forecastLocation').textContent = locName;
+
+      if (!pointData.properties?.forecastHourly) {
+        document.getElementById('forecastCondition').textContent = 'HRRR data · NWS grid unavailable';
         return;
       }
 
-      // Step 2: Get detailed forecast
       const fcResp = await fetch(pointData.properties.forecastHourly, {
         headers: { 'User-Agent': 'Gale Weather (galeweather.com)' }
       });
       const fcData = await fcResp.json();
       const now = fcData.properties.periods[0];
 
-      const city = pointData.properties.relativeLocation?.properties;
-      const locName = city ? `${city.city}, ${city.state}` : `${lat.toFixed(2)}°N`;
-
-      document.getElementById('forecastLocation').textContent = locName;
+      // NWS overrides HRRR temp if available (NWS is observation-corrected)
       document.getElementById('forecastTemp').innerHTML = `${now.temperature}<span>°${now.temperatureUnit}</span>`;
       document.getElementById('forecastCondition').textContent = now.shortForecast;
       document.getElementById('fWind').textContent = now.windSpeed;
       document.getElementById('fHumidity').textContent = now.relativeHumidity?.value ? `${Math.round(now.relativeHumidity.value)}%` : '—';
       document.getElementById('fDewpoint').textContent = now.dewpoint?.value ? `${Math.round(now.dewpoint.value * 9/5 + 32)}°F` : '—';
-      document.getElementById('fPrecip').textContent = now.probabilityOfPrecipitation?.value ? `${now.probabilityOfPrecipitation.value}%` : '0%';
+      document.getElementById('fPrecip').textContent = now.probabilityOfPrecipitation?.value ? `${now.probabilityOfPrecipitation.value}%` : (precipIn !== null && precipIn > 0 ? `${precipIn} in` : '0%');
 
-    } catch (e) {
-      console.warn('Forecast error:', e);
-      document.getElementById('forecastLocation').textContent = 'Forecast unavailable';
-      document.getElementById('forecastCondition').textContent = 'NWS API may be temporarily down';
+    } catch (err) {
+      console.warn('NWS forecast error:', err);
+      // HRRR values stay visible — just update the status text
+      document.getElementById('forecastLocation').textContent = tempF !== null ? `${lat.toFixed(2)}°N, ${Math.abs(lng).toFixed(2)}°W` : 'Forecast unavailable';
+      document.getElementById('forecastCondition').textContent = tempF !== null ? 'HRRR data · NWS unavailable' : 'NWS API may be temporarily down';
     }
   });
 
@@ -1521,6 +1678,8 @@
       case ' ': e.preventDefault(); playBtn.click(); break;
       case 'r': document.querySelector('[data-layer="radar"]').click(); break;
       case 't': document.querySelector('[data-layer="temp"]').click(); break;
+      case 'w': document.querySelector('[data-layer="wind"]').click(); break;
+      case 'p': document.querySelector('[data-layer="precip"]').click(); break;
       case 's': document.querySelector('[data-layer="satellite"]').click(); break;
     }
   });

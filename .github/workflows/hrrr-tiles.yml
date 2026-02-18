@@ -1,4 +1,4 @@
-name: HRRR Temperature Tiles
+name: HRRR Weather Tiles
 
 on:
   schedule:
@@ -8,7 +8,7 @@ on:
 jobs:
   generate-tiles:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -19,8 +19,14 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq gdal-bin python3-gdal
 
-      - name: Run HRRR pipeline
+      - name: Run temperature pipeline
         run: python3 scripts/hrrr_temperature.py
+
+      - name: Run wind pipeline
+        run: python3 scripts/hrrr_wind.py
+
+      - name: Run precipitation pipeline
+        run: python3 scripts/hrrr_precipitation.py
 
       - name: Sync tiles to R2
         env:
@@ -28,18 +34,22 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
         run: |
-          # Sync tile PNGs with 1-hour cache
-          aws s3 sync scripts/output/temperature/ s3://gale-tiles/temperature/ \
-            --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" \
-            --delete \
-            --size-only \
-            --exclude "metadata.json" \
-            --cache-control "public, max-age=3600" \
-            --no-progress
+          for layer in temperature wind precipitation; do
+            echo "Syncing ${layer} tiles..."
 
-          # Upload metadata.json with 5-minute cache
-          aws s3 cp scripts/output/temperature/metadata.json s3://gale-tiles/temperature/metadata.json \
-            --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" \
-            --cache-control "public, max-age=300" \
-            --content-type "application/json" \
-            --no-progress
+            # Sync tile PNGs with 1-hour cache
+            aws s3 sync "scripts/output/${layer}/" "s3://gale-tiles/${layer}/" \
+              --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" \
+              --delete \
+              --size-only \
+              --exclude "metadata.json" \
+              --cache-control "public, max-age=3600" \
+              --no-progress
+
+            # Upload metadata.json with 5-minute cache
+            aws s3 cp "scripts/output/${layer}/metadata.json" "s3://gale-tiles/${layer}/metadata.json" \
+              --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" \
+              --cache-control "public, max-age=300" \
+              --content-type "application/json" \
+              --no-progress
+          done

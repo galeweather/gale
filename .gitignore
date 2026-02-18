@@ -4,4 +4,8 @@ scripts/test.tif
 scripts/test_byte.vrt
 scripts/test.grib2
 scripts/hrrr_tmp2m.*
+scripts/hrrr_ugrd.*
+scripts/hrrr_vgrd.*
+scripts/hrrr_wspd.*
+scripts/hrrr_apcp.*
 .DS_Store
