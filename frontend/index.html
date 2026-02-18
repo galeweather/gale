@@ -148,18 +148,97 @@
     padding: 2px 6px;
     border-radius: 4px;
     margin-left: 2px;
+    transition: opacity var(--transition);
   }
+
+  .logo-divider {
+    width: 1px;
+    height: 20px;
+    background: var(--border-subtle);
+    margin: 0 4px;
+  }
+
+  .logo-location {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    transition: all var(--transition);
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .logo-location:hover { color: var(--text-primary); background: rgba(255, 255, 255, 0.04); }
+  .logo-location svg { width: 14px; height: 14px; flex-shrink: 0; }
 
   .search-container {
     pointer-events: auto;
     position: relative;
     flex: 1;
     max-width: 420px;
+    display: none;
+  }
+
+  .search-container.open {
+    display: block;
+  }
+
+  .locate-inline {
+    pointer-events: auto;
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-panel);
+    backdrop-filter: blur(20px);
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all var(--transition);
+    box-shadow: var(--shadow-md);
+  }
+
+  .locate-inline:hover { border-color: var(--accent); color: var(--accent); }
+  .locate-inline.visible { display: flex; }
+
+  .search-close {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: all var(--transition);
+  }
+
+  .search-close:hover { color: var(--text-primary); background: rgba(255, 255, 255, 0.06); }
+
+  .recent-header {
+    padding: 8px 16px 4px;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-muted);
   }
 
   .search-input {
     width: 100%;
-    padding: 11px 16px 11px 40px;
+    padding: 11px 36px 11px 40px;
     background: var(--bg-panel);
     backdrop-filter: blur(20px);
     border: 1px solid var(--border-subtle);
@@ -650,30 +729,7 @@
     font-size: 9px;
   }
 
-  /* ═══════════════════════════════════════════
-     LOCATION BUTTON
-     ═══════════════════════════════════════════ */
-  .locate-btn {
-    position: fixed;
-    bottom: 76px;
-    right: 160px;
-    z-index: 100;
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    border: 1px solid var(--border-subtle);
-    background: var(--bg-panel);
-    backdrop-filter: blur(16px);
-    color: var(--text-secondary);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all var(--transition);
-    box-shadow: var(--shadow-md);
-  }
-
-  .locate-btn:hover { border-color: var(--accent); color: var(--accent); }
+  /* (locate button moved inline to top bar) */
 
   /* ═══════════════════════════════════════════
      USER LOCATION DOT
@@ -720,6 +776,8 @@
   @media (max-width: 640px) {
     .top-bar { top: 10px; left: 10px; right: 10px; }
     .logo-badge { display: none; }
+    .logo-location span { display: none; }
+    .logo.search-active { display: none; }
     .search-container { max-width: none; }
     .layers-toggle { display: flex; }
     .sidebar {
@@ -742,7 +800,6 @@
     .timeline-bar { padding: 30px 10px 10px; }
     .legend { left: 10px; bottom: 66px; }
     .freshness { bottom: 66px; right: 10px; }
-    .locate-btn { bottom: 66px; right: 60px; }
   }
 </style>
 </head>
@@ -764,7 +821,33 @@
       <path d="M3 20c3-4 6-5 9-3s6 1 9-3" stroke-linecap="round" opacity="0.25"/>
     </svg>
     <span class="logo-text">Gale</span>
-    <span class="logo-badge">Alpha</span>
+    <span class="logo-badge" id="logoBadge">Alpha</span>
+    <div class="logo-divider"></div>
+    <div class="logo-location" id="locationToggle" title="Search or locate">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="3"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/>
+      </svg>
+      <span>Location</span>
+    </div>
+  </div>
+
+  <button class="locate-inline" id="locateBtn" title="My location">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <circle cx="12" cy="12" r="3"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/>
+    </svg>
+  </button>
+
+  <div class="search-container" id="searchContainer">
+    <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/>
+    </svg>
+    <input class="search-input" type="text" placeholder="Search city or address..." id="searchInput" autocomplete="off">
+    <button class="search-close" id="searchClose" title="Close search">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M18 6L6 18M6 6l12 12"/>
+      </svg>
+    </button>
+    <div class="search-results" id="searchResults"></div>
   </div>
 
   <button class="layers-toggle" id="layersToggle" title="Layers">
@@ -774,14 +857,6 @@
       <polyline points="2 12 12 17 22 12"/>
     </svg>
   </button>
-
-  <div class="search-container">
-    <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/>
-    </svg>
-    <input class="search-input" type="text" placeholder="Search city or address..." id="searchInput" autocomplete="off">
-    <div class="search-results" id="searchResults"></div>
-  </div>
 </div>
 
 <!-- ════════════════════════════════════════════
@@ -855,14 +930,7 @@
   </div>
 </div>
 
-<!-- ════════════════════════════════════════════
-     LOCATE ME
-     ════════════════════════════════════════════ -->
-<button class="locate-btn" id="locateBtn" title="My location">
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-    <circle cx="12" cy="12" r="3"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/>
-  </svg>
-</button>
+<!-- locate button moved inline to top bar -->
 
 <!-- ════════════════════════════════════════════
      FRESHNESS
@@ -2296,6 +2364,43 @@
     layersToggle.classList.toggle('active');
   });
 
+  // ─── Recent Locations Cache ─────────────────
+  const RECENTS_KEY = 'gale_recent_locations';
+  const MAX_RECENTS = 5;
+
+  function getRecentLocations() {
+    try { return JSON.parse(localStorage.getItem(RECENTS_KEY)) || []; }
+    catch { return []; }
+  }
+
+  function saveRecentLocation(name, lat, lon) {
+    const recents = getRecentLocations().filter(r => r.name !== name);
+    recents.unshift({ name, lat, lon });
+    if (recents.length > MAX_RECENTS) recents.length = MAX_RECENTS;
+    localStorage.setItem(RECENTS_KEY, JSON.stringify(recents));
+  }
+
+  function showRecentLocations() {
+    const recents = getRecentLocations();
+    if (recents.length === 0) return;
+    searchResults.innerHTML = '<div class="recent-header">Recent</div>';
+    recents.forEach(r => {
+      const item = document.createElement('div');
+      item.className = 'search-result-item';
+      item.textContent = r.name;
+      item.addEventListener('click', () => {
+        map.flyTo({ center: [r.lon, r.lat], zoom: 8, duration: 1500 });
+        setUserLocationMarker(r.lon, r.lat);
+        closeSearch();
+        map.once('moveend', () => {
+          map.fire('click', { lngLat: { lng: r.lon, lat: r.lat }, point: map.project([r.lon, r.lat]), originalEvent: new MouseEvent('click') });
+        });
+      });
+      searchResults.appendChild(item);
+    });
+    searchResults.classList.add('active');
+  }
+
   // ─── Search (Nominatim) ─────────────────────
   const searchInput = document.getElementById('searchInput');
   const searchResults = document.getElementById('searchResults');
@@ -2304,7 +2409,11 @@
   searchInput.addEventListener('input', () => {
     clearTimeout(searchTimeout);
     const q = searchInput.value.trim();
-    if (q.length < 3) { searchResults.classList.remove('active'); return; }
+    if (q.length < 3) {
+      if (q.length === 0) showRecentLocations();
+      else searchResults.classList.remove('active');
+      return;
+    }
 
     searchTimeout = setTimeout(async () => {
       try {
@@ -2320,9 +2429,14 @@
           item.className = 'search-result-item';
           item.textContent = r.display_name;
           item.addEventListener('click', () => {
-            map.flyTo({ center: [parseFloat(r.lon), parseFloat(r.lat)], zoom: 8, duration: 1500 });
-            searchResults.classList.remove('active');
-            searchInput.value = r.display_name.split(',')[0];
+            const lat = parseFloat(r.lat), lon = parseFloat(r.lon);
+            saveRecentLocation(r.display_name.split(',')[0], lat, lon);
+            map.flyTo({ center: [lon, lat], zoom: 8, duration: 1500 });
+            setUserLocationMarker(lon, lat);
+            closeSearch();
+            map.once('moveend', () => {
+              map.fire('click', { lngLat: { lng: lon, lat }, point: map.project([lon, lat]), originalEvent: new MouseEvent('click') });
+            });
           });
           searchResults.appendChild(item);
         });
@@ -2332,7 +2446,10 @@
   });
 
   document.addEventListener('click', (e) => {
-    if (!e.target.closest('.search-container')) searchResults.classList.remove('active');
+    if (!e.target.closest('.search-container') && !e.target.closest('.logo')) {
+      searchResults.classList.remove('active');
+      if (searchContainer.classList.contains('open')) closeSearch();
+    }
   });
 
   // ─── Point Forecast (NWS API) ───────────────
@@ -2497,6 +2614,42 @@
     }
   });
 
+  // ─── Location Toggle (search panel) ─────────
+  const searchContainer = document.getElementById('searchContainer');
+  const locationToggle = document.getElementById('locationToggle');
+  const searchClose = document.getElementById('searchClose');
+  const logoBadge = document.getElementById('logoBadge');
+  const locateBtn = document.getElementById('locateBtn');
+
+  function openSearch() {
+    searchContainer.classList.add('open');
+    locateBtn.classList.add('visible');
+    logoBadge.style.display = 'none';
+    document.querySelector('.logo').classList.add('search-active');
+    searchInput.focus();
+    if (!searchInput.value.trim()) showRecentLocations();
+  }
+
+  function closeSearch() {
+    searchContainer.classList.remove('open');
+    locateBtn.classList.remove('visible');
+    logoBadge.style.display = '';
+    document.querySelector('.logo').classList.remove('search-active');
+    searchResults.classList.remove('active');
+    searchInput.blur();
+    searchInput.value = '';
+  }
+
+  locationToggle.addEventListener('click', () => {
+    if (searchContainer.classList.contains('open')) {
+      closeSearch();
+    } else {
+      openSearch();
+    }
+  });
+
+  searchClose.addEventListener('click', closeSearch);
+
   // ─── Locate Me ──────────────────────────────
   let userLocationMarker = null;
 
@@ -2508,7 +2661,7 @@
     userLocationMarker = new maplibregl.Marker({ element: el }).setLngLat([lng, lat]).addTo(map);
   }
 
-  document.getElementById('locateBtn').addEventListener('click', () => {
+  function doLocate() {
     if ('geolocation' in navigator) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
@@ -2516,7 +2669,8 @@
           const lat = pos.coords.latitude;
           map.flyTo({ center: [lng, lat], zoom: 8, duration: 1500 });
           setUserLocationMarker(lng, lat);
-          // Trigger forecast card like a map click
+          saveRecentLocation('My Location', lat, lng);
+          closeSearch();
           map.once('moveend', () => {
             map.fire('click', { lngLat: { lng, lat }, point: map.project([lng, lat]), originalEvent: new MouseEvent('click') });
           });
@@ -2524,14 +2678,24 @@
         () => console.warn('Location access denied')
       );
     }
-  });
+  }
+
+  locateBtn.addEventListener('click', doLocate);
 
   // ─── Keyboard Shortcuts ─────────────────────
   document.addEventListener('keydown', (e) => {
+    // Allow Escape from within search input to close search
+    if (e.key === 'Escape' && e.target.tagName === 'INPUT') {
+      closeSearch();
+      drawer.classList.remove('open');
+      sidebar.classList.remove('open');
+      layersToggle.classList.remove('active');
+      return;
+    }
     if (e.target.tagName === 'INPUT') return;
     switch(e.key) {
-      case '/': e.preventDefault(); searchInput.focus(); break;
-      case 'Escape': drawer.classList.remove('open'); searchResults.classList.remove('active'); searchInput.blur(); sidebar.classList.remove('open'); layersToggle.classList.remove('active'); break;
+      case '/': e.preventDefault(); openSearch(); break;
+      case 'Escape': closeSearch(); drawer.classList.remove('open'); sidebar.classList.remove('open'); layersToggle.classList.remove('active'); break;
       case ' ': e.preventDefault(); playBtn.click(); break;
       case 'r': document.querySelector('[data-layer="radar"]').click(); break;
       case 't': document.querySelector('[data-layer="temp"]').click(); break;
