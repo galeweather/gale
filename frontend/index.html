@@ -1177,20 +1177,48 @@
       }
     });
 
-    // Tier 2: Major cities — rank ≤ 3 (zoom 4+)
+    // Tier 2: Major cities — rank ≤ 6 (zoom 3+)
     map.addLayer({
       id: 'place-city-major',
       type: 'symbol',
       source: 'labels',
       'source-layer': 'place',
-      filter: ['all', ['==', 'class', 'city'], ['<=', 'rank', 3]],
+      filter: ['all', ['==', 'class', 'city'], ['<=', 'rank', 6]],
+      minzoom: 3,
+      layout: {
+        'text-field': ['get', 'name'],
+        'text-font': ['Noto Sans Bold'],
+        'text-size': [
+          'interpolate', ['linear'], ['zoom'],
+          3, 12, 10, 18
+        ],
+        'text-allow-overlap': false,
+        'text-padding': 4
+      },
+      paint: {
+        'text-color': '#e2e8f0',
+        ...labelHalo,
+        'text-opacity': [
+          'interpolate', ['linear'], ['zoom'],
+          3, 0, 4, 1
+        ]
+      }
+    });
+
+    // Tier 3: Other cities — rank > 6 (zoom 4+)
+    map.addLayer({
+      id: 'place-city',
+      type: 'symbol',
+      source: 'labels',
+      'source-layer': 'place',
+      filter: ['all', ['==', 'class', 'city'], ['>', 'rank', 6]],
       minzoom: 4,
       layout: {
         'text-field': ['get', 'name'],
         'text-font': ['Noto Sans Bold'],
         'text-size': [
           'interpolate', ['linear'], ['zoom'],
-          4, 14, 10, 18
+          4, 11, 10, 15
         ],
         'text-allow-overlap': false,
         'text-padding': 4
@@ -1205,42 +1233,14 @@
       }
     });
 
-    // Tier 3: Other cities — rank > 3 (zoom 6+)
-    map.addLayer({
-      id: 'place-city',
-      type: 'symbol',
-      source: 'labels',
-      'source-layer': 'place',
-      filter: ['all', ['==', 'class', 'city'], ['>', 'rank', 3]],
-      minzoom: 6,
-      layout: {
-        'text-field': ['get', 'name'],
-        'text-font': ['Noto Sans Bold'],
-        'text-size': [
-          'interpolate', ['linear'], ['zoom'],
-          6, 12, 10, 15
-        ],
-        'text-allow-overlap': false,
-        'text-padding': 4
-      },
-      paint: {
-        'text-color': '#e2e8f0',
-        ...labelHalo,
-        'text-opacity': [
-          'interpolate', ['linear'], ['zoom'],
-          6, 0, 7, 1
-        ]
-      }
-    });
-
-    // Tier 4: Towns (zoom 9+)
+    // Tier 4: Towns (zoom 7+)
     map.addLayer({
       id: 'place-town',
       type: 'symbol',
       source: 'labels',
       'source-layer': 'place',
       filter: ['==', 'class', 'town'],
-      minzoom: 9,
+      minzoom: 7,
       layout: {
         'text-field': ['get', 'name'],
         'text-font': ['Noto Sans Regular'],
@@ -1253,7 +1253,7 @@
         ...labelHalo,
         'text-opacity': [
           'interpolate', ['linear'], ['zoom'],
-          9, 0, 10, 1
+          7, 0, 8, 1
         ]
       }
     });
@@ -1423,14 +1423,13 @@
     const bounds = map.getBounds();
     const west = bounds.getWest(), east = bounds.getEast();
     const north = bounds.getNorth(), south = bounds.getSouth();
-    const lngStep = (east - west) / 4;
-    const latStep = (north - south) / 3;
+    const lngStep = (east - west) / 6;
+    const latStep = (north - south) / 5;
 
     const features = [];
     const promises = [];
-    // Sample a 3x2 grid of points across the viewport
-    for (let row = 0.5; row < 3; row++) {
-      for (let col = 0.5; col < 4; col++) {
+    for (let row = 0.5; row < 5; row++) {
+      for (let col = 0.5; col < 6; col++) {
         const lng = west + col * lngStep;
         const lat = south + row * latStep;
         promises.push(sampleTileAt(lng, lat, 'temperature').then(tempF => {
@@ -1455,13 +1454,13 @@
     const bounds = map.getBounds();
     const west = bounds.getWest(), east = bounds.getEast();
     const north = bounds.getNorth(), south = bounds.getSouth();
-    const lngStep = (east - west) / 4;
-    const latStep = (north - south) / 3;
+    const lngStep = (east - west) / 6;
+    const latStep = (north - south) / 5;
 
     const features = [];
     const promises = [];
-    for (let row = 0.5; row < 3; row++) {
-      for (let col = 0.5; col < 4; col++) {
+    for (let row = 0.5; row < 5; row++) {
+      for (let col = 0.5; col < 6; col++) {
         const lng = west + col * lngStep;
         const lat = south + row * latStep;
         promises.push(sampleTileAt(lng, lat, 'wind').then(mph => {
@@ -1486,13 +1485,13 @@
     const bounds = map.getBounds();
     const west = bounds.getWest(), east = bounds.getEast();
     const north = bounds.getNorth(), south = bounds.getSouth();
-    const lngStep = (east - west) / 4;
-    const latStep = (north - south) / 3;
+    const lngStep = (east - west) / 6;
+    const latStep = (north - south) / 5;
 
     const features = [];
     const promises = [];
-    for (let row = 0.5; row < 3; row++) {
-      for (let col = 0.5; col < 4; col++) {
+    for (let row = 0.5; row < 5; row++) {
+      for (let col = 0.5; col < 6; col++) {
         const lng = west + col * lngStep;
         const lat = south + row * latStep;
         promises.push(sampleTileAt(lng, lat, 'precipitation').then(inches => {
