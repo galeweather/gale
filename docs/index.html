@@ -639,6 +639,10 @@
     background: linear-gradient(to right, #00000000, #00ff00, #ffff00, #ff8800, #ff0000, #ff00ff);
   }
 
+  .legend-gradient.temp {
+    background: linear-gradient(to right, #1e3a5f, #2563eb, #06b6d4, #10b981, #84cc16, #eab308, #f97316, #ef4444, #991b1b);
+  }
+
   .legend-labels {
     display: flex;
     justify-content: space-between;
@@ -954,6 +958,24 @@
 
   // ─── Add Map Layers (order matters: bottom → top) ───
   map.on('load', () => {
+    // Temperature color wash — HRRR tiles from R2 (renders below radar)
+    map.addSource('temperature-tiles', {
+      type: 'raster',
+      tiles: [`${TILE_BASE}/temperature/{z}/{x}/{y}.png`],
+      tileSize: 256,
+      maxzoom: 6
+    });
+
+    map.addLayer({
+      id: 'temperature-layer',
+      type: 'raster',
+      source: 'temperature-tiles',
+      paint: {
+        'raster-opacity': 0.7,
+        'raster-fade-duration': 300
+      }
+    });
+
     // MRMS Radar — Iowa State Mesonet (renders on top of temperature/wind/precip)
     map.addSource('radar', {
       type: 'raster',
@@ -1134,6 +1156,64 @@
       }
     });
 
+    // Precipitation icons — canvas-drawn rain drop and snowflake
+    (function createPrecipIcons() {
+      const size = 48;
+
+      // Rain drop (teardrop shape)
+      const rainCanvas = document.createElement('canvas');
+      rainCanvas.width = size; rainCanvas.height = size;
+      const rc = rainCanvas.getContext('2d');
+      rc.beginPath();
+      rc.moveTo(24, 6);
+      rc.bezierCurveTo(24, 6, 10, 24, 10, 30);
+      rc.bezierCurveTo(10, 38, 17, 44, 24, 44);
+      rc.bezierCurveTo(31, 44, 38, 38, 38, 30);
+      rc.bezierCurveTo(38, 24, 24, 6, 24, 6);
+      rc.closePath();
+      rc.fillStyle = 'rgba(96, 165, 250, 0.85)';
+      rc.fill();
+      rc.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+      rc.lineWidth = 2;
+      rc.stroke();
+      map.addImage('precip-rain', { width: size, height: size, data: rc.getImageData(0, 0, size, size).data });
+
+      // Snowflake (6-armed with branches)
+      const snowCanvas = document.createElement('canvas');
+      snowCanvas.width = size; snowCanvas.height = size;
+      const sc = snowCanvas.getContext('2d');
+      const cx = 24, cy = 24, armLen = 16, branchLen = 6;
+      sc.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+      sc.lineWidth = 2;
+      sc.lineCap = 'round';
+      for (let i = 0; i < 6; i++) {
+        const angle = (i * 60) * Math.PI / 180;
+        const ex = cx + Math.cos(angle) * armLen;
+        const ey = cy + Math.sin(angle) * armLen;
+        // Main arm
+        sc.beginPath();
+        sc.moveTo(cx, cy);
+        sc.lineTo(ex, ey);
+        sc.stroke();
+        // Branch left
+        const mid = 0.6;
+        const mx = cx + Math.cos(angle) * armLen * mid;
+        const my = cy + Math.sin(angle) * armLen * mid;
+        const bAngleL = angle + Math.PI / 4;
+        const bAngleR = angle - Math.PI / 4;
+        sc.beginPath();
+        sc.moveTo(mx, my);
+        sc.lineTo(mx + Math.cos(bAngleL) * branchLen, my + Math.sin(bAngleL) * branchLen);
+        sc.stroke();
+        // Branch right
+        sc.beginPath();
+        sc.moveTo(mx, my);
+        sc.lineTo(mx + Math.cos(bAngleR) * branchLen, my + Math.sin(bAngleR) * branchLen);
+        sc.stroke();
+      }
+      map.addImage('precip-snow', { width: size, height: size, data: sc.getImageData(0, 0, size, size).data });
+    })();
+
     // Precipitation labels — shows precip amounts at grid points
     map.addSource('precip-labels', {
       type: 'geojson',
@@ -1145,11 +1225,15 @@
       type: 'symbol',
       source: 'precip-labels',
       layout: {
+        'icon-image': ['match', ['get', 'type'], 'snow', 'precip-snow', 'precip-rain'],
+        'icon-size': 0.5,
         'text-field': ['get', 'label'],
-        'text-size': 13,
+        'text-size': 12,
         'text-font': ['Noto Sans Bold'],
+        'text-offset': [0, 1.2],
+        'text-anchor': 'top',
+        'icon-allow-overlap': false,
         'text-allow-overlap': false,
-        'text-ignore-placement': false,
         'text-padding': 8
       },
       paint: {
@@ -1534,8 +1618,7 @@
           ]).then(([inches, tempF]) => {
             if (inches !== null && inches > 0) {
               const type = (tempF !== null && tempF <= 32) ? 'snow' : 'rain';
-              const prefix = type === 'snow' ? '\u2744 ' : '';
-              const label = inches < 0.01 ? `${prefix}Trace` : `${prefix}${inches} in`;
+              const label = inches < 0.01 ? 'Trace' : `${inches}"`;
               features.push({
                 type: 'Feature',
                 geometry: { type: 'Point', coordinates: [lng, lat] },
@@ -1636,6 +1719,11 @@
         }
         // Clear in-memory pixel-sampling cache
         Object.keys(tileCache).forEach(k => delete tileCache[k]);
+        // Bust temperature raster tile cache
+        if (map.getSource('temperature-tiles')) {
+          const ts = Date.now();
+          map.getSource('temperature-tiles').setTiles([`${TILE_BASE}/temperature/{z}/{x}/{y}.png?_=${ts}`]);
+        }
         setTimeout(updateAllLabels, 1000);
         document.getElementById('freshnessText').textContent =
           `HRRR ${meta.hrrr_hour}Z · MRMS live`;
@@ -1661,7 +1749,15 @@
       map.setLayoutProperty('alerts-line', 'visibility', layers.alerts ? 'visible' : 'none');
     }
 
-    // HRRR layers: label visibility (no raster overlays)
+    // Temperature raster overlay
+    if (map.getLayer('temperature-layer')) {
+      map.setLayoutProperty('temperature-layer', 'visibility', layers.temp ? 'visible' : 'none');
+      if (layers.temp) {
+        map.setPaintProperty('temperature-layer', 'raster-opacity', layers.radar ? 0.25 : 0.7);
+      }
+    }
+
+    // HRRR layers: label visibility
     if (map.getLayer('temp-labels-layer')) {
       map.setLayoutProperty('temp-labels-layer', 'visibility', layers.temp ? 'visible' : 'none');
     }
@@ -1680,7 +1776,7 @@
     if (layers.wind) updateWindLabels();
     if (layers.precip) updatePrecipLabels();
 
-    // Legend: only show for radar
+    // Legend: radar takes priority, then temp
     const legend = document.getElementById('legend');
     const grad = document.getElementById('legendGradient');
     const lMin = document.getElementById('legendMin');
@@ -1691,6 +1787,11 @@
       grad.className = 'legend-gradient radar';
       lMin.textContent = 'Light';
       lMax.textContent = 'Heavy';
+    } else if (layers.temp) {
+      legend.classList.add('visible');
+      grad.className = 'legend-gradient temp';
+      lMin.textContent = '-40°F';
+      lMax.textContent = '120°F';
     } else {
       legend.classList.remove('visible');
     }
