@@ -704,7 +704,7 @@
     }
     .sidebar.open { display: flex; }
     .layer-btn { min-width: auto; padding: 8px 10px; }
-    .layer-btn span { display: none; }
+    .layer-btn svg { display: none; }
     .layer-divider { display: none; }
     .forecast-drawer { left: 10px; right: 10px; }
     .forecast-drawer.open { bottom: 60px; }
@@ -799,6 +799,15 @@
       <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
     </svg>
     <span>Alerts</span>
+  </button>
+
+  <div class="layer-divider"></div>
+
+  <button class="layer-btn active" id="viewToggle" title="Toggle 3D / 2D view (V)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+      <path d="M12 3L2 9l10 6 10-6-10-6z"/><path d="M2 15l10 6 10-6"/><path d="M2 12l10 6 10-6"/>
+    </svg>
+    <span>3D</span>
   </button>
 </div>
 
@@ -1634,7 +1643,7 @@
     }
   }
 
-  document.querySelectorAll('.layer-btn').forEach(btn => {
+  document.querySelectorAll('.layer-btn[data-layer]').forEach(btn => {
     btn.addEventListener('click', () => {
       const layer = btn.dataset.layer;
       layers[layer] = !layers[layer];
@@ -1642,6 +1651,19 @@
       updateLayerVisibility();
     });
   });
+
+  // ─── 3D / 2D View Toggle ──────────────────────
+  let is3D = true;
+  const viewToggle = document.getElementById('viewToggle');
+
+  function toggleView() {
+    is3D = !is3D;
+    map.easeTo({ pitch: is3D ? 45 : 0, duration: 600 });
+    viewToggle.classList.toggle('active', is3D);
+    viewToggle.querySelector('span').textContent = is3D ? '3D' : '2D';
+  }
+
+  viewToggle.addEventListener('click', toggleView);
 
   // ─── Mobile Layers Dropdown ────────────────────
   const layersToggle = document.getElementById('layersToggle');
@@ -1882,6 +1904,7 @@
       case 'w': document.querySelector('[data-layer="wind"]').click(); break;
       case 'p': document.querySelector('[data-layer="precip"]').click(); break;
       case 's': document.querySelector('[data-layer="satellite"]').click(); break;
+      case 'v': toggleView(); break;
     }
   });
 
