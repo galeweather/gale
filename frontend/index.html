@@ -995,6 +995,409 @@
     alerts: false
   };
 
+  // ─── Wind Particle System (WebGL) ─────────────────
+  const PARTICLE_RES = window.innerWidth < 640 ? 128 : 256;
+  const PARTICLE_COUNT = PARTICLE_RES * PARTICLE_RES;
+  const FADE_OPACITY = window.innerWidth < 640 ? 0.993 : 0.996;
+  let windParticleLayer = null;
+
+  function glShader(gl, type, src) {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+      console.error('Shader:', gl.getShaderInfoLog(s));
+      gl.deleteShader(s); return null;
+    }
+    return s;
+  }
+
+  function glProgram(gl, vsSrc, fsSrc) {
+    const vs = glShader(gl, gl.VERTEX_SHADER, vsSrc);
+    const fs = glShader(gl, gl.FRAGMENT_SHADER, fsSrc);
+    if (!vs || !fs) return null;
+    const p = gl.createProgram();
+    gl.attachShader(p, vs); gl.attachShader(p, fs);
+    gl.linkProgram(p);
+    gl.deleteShader(vs); gl.deleteShader(fs);
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
+      console.error('Program:', gl.getProgramInfoLog(p)); return null;
+    }
+    return p;
+  }
+
+  function glTex(gl, filter) {
+    const t = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
+    return t;
+  }
+
+  function glBind(gl, tex, unit) {
+    gl.activeTexture(gl.TEXTURE0 + unit);
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+  }
+
+  // GLSL shaders (GLSL ES 1.0 for max compatibility)
+  const W_QUAD_VS = `
+    attribute vec2 a_pos;
+    varying vec2 v_tex;
+    void main() {
+      v_tex = a_pos * 0.5 + 0.5;
+      gl_Position = vec4(a_pos, 0, 1);
+    }`;
+
+  const W_UPDATE_FS = `
+    precision highp float;
+    uniform sampler2D u_particles;
+    uniform sampler2D u_wind_u;
+    uniform sampler2D u_wind_v;
+    uniform vec2 u_wind_min;
+    uniform vec2 u_wind_max;
+    uniform float u_speed_factor;
+    uniform float u_drop_rate;
+    uniform float u_drop_rate_bump;
+    uniform float u_rand_seed;
+    varying vec2 v_tex;
+
+    float rand(vec2 co) {
+      return fract(sin(dot(co + u_rand_seed, vec2(12.9898, 78.233))) * 43758.5453);
+    }
+    vec2 decode(vec4 c) { return vec2(c.r + c.g / 255.0, c.b + c.a / 255.0); }
+    vec4 encode(vec2 p) {
+      return vec4(floor(p.x*255.0)/255.0, fract(p.x*255.0),
+                  floor(p.y*255.0)/255.0, fract(p.y*255.0));
+    }
+    void main() {
+      vec2 pos = decode(texture2D(u_particles, v_tex));
+      vec2 uv = (pos - u_wind_min) / (u_wind_max - u_wind_min);
+      vec2 wind = vec2(0.0);
+      if (uv.x >= 0.0 && uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0) {
+        float u = texture2D(u_wind_u, uv).r * 80.0 - 40.0;
+        float v = texture2D(u_wind_v, uv).r * 80.0 - 40.0;
+        wind = vec2(u, -v);
+      }
+      float spd = length(wind);
+      vec2 npos = pos + wind * u_speed_factor;
+      float drop = u_drop_rate + spd * u_drop_rate_bump;
+      vec2 seed = pos + u_rand_seed;
+      vec2 respawn = vec2(
+        u_wind_min.x + rand(seed + 1.3) * (u_wind_max.x - u_wind_min.x),
+        u_wind_min.y + rand(seed + 2.1) * (u_wind_max.y - u_wind_min.y));
+      bool oob = npos.x < u_wind_min.x || npos.x > u_wind_max.x ||
+                 npos.y < u_wind_min.y || npos.y > u_wind_max.y;
+      gl_FragColor = encode((rand(seed) < drop || oob) ? respawn : npos);
+    }`;
+
+  const W_DRAW_VS = `
+    precision highp float;
+    attribute float a_index;
+    uniform sampler2D u_particles;
+    uniform sampler2D u_wind_u;
+    uniform sampler2D u_wind_v;
+    uniform float u_particles_res;
+    uniform vec2 u_wind_min;
+    uniform vec2 u_wind_max;
+    uniform mat4 u_matrix;
+    varying float v_speed;
+    vec2 decode(vec4 c) { return vec2(c.r + c.g / 255.0, c.b + c.a / 255.0); }
+    void main() {
+      float y = floor(a_index / u_particles_res);
+      float x = a_index - y * u_particles_res;
+      vec2 uv = (vec2(x, y) + 0.5) / u_particles_res;
+      vec2 pos = decode(texture2D(u_particles, uv));
+      vec2 wuv = (pos - u_wind_min) / (u_wind_max - u_wind_min);
+      v_speed = 0.0;
+      if (wuv.x >= 0.0 && wuv.x <= 1.0 && wuv.y >= 0.0 && wuv.y <= 1.0) {
+        float u = texture2D(u_wind_u, wuv).r * 80.0 - 40.0;
+        float v = texture2D(u_wind_v, wuv).r * 80.0 - 40.0;
+        v_speed = length(vec2(u, v));
+      }
+      gl_Position = u_matrix * vec4(pos, 0.0, 1.0);
+      gl_PointSize = 1.0;
+    }`;
+
+  const W_DRAW_FS = `
+    precision mediump float;
+    uniform sampler2D u_color_ramp;
+    varying float v_speed;
+    void main() {
+      float t = clamp(v_speed / 40.0, 0.0, 1.0);
+      gl_FragColor = texture2D(u_color_ramp, vec2(t, 0.5));
+    }`;
+
+  const W_SCREEN_FS = `
+    precision mediump float;
+    uniform sampler2D u_screen;
+    uniform float u_opacity;
+    varying vec2 v_tex;
+    void main() {
+      vec4 c = texture2D(u_screen, v_tex);
+      gl_FragColor = vec4(c.rgb, c.a * u_opacity);
+    }`;
+
+  function createWindParticleLayer() {
+    let windLoaded = false, cameraMoving = false;
+    let upProg, drProg, scProg;
+    let wuTex, wvTex, crTex, pTex0, pTex1, sTex0, sTex1;
+    let qBuf, iBuf, fbo;
+    let pIdx = 0, sIdx = 0, mapR, glR, cw = 0, ch = 0;
+    const WB = { x0: 1/8, y0: 2/8, x1: 3/8, y1: 4/8 };
+
+    function loadWind(gl) {
+      const tiles = [{x:1,y:2},{x:2,y:2},{x:1,y:3},{x:2,y:3}];
+      const can = document.createElement('canvas');
+      can.width = 512; can.height = 512;
+      const cx = can.getContext('2d');
+      function stitch(layer) {
+        return new Promise(res => {
+          let n = 0; const imgs = [];
+          tiles.forEach((c, i) => {
+            const img = new Image(); img.crossOrigin = 'anonymous';
+            img.onload = () => { imgs[i] = img; if (++n === 4) finish(); };
+            img.onerror = () => { imgs[i] = null; if (++n === 4) finish(); };
+            img.src = `${TILE_BASE}/${layer}/3/${c.x}/${c.y}.png`;
+          });
+          function finish() {
+            if (imgs.some(v => !v)) { res(null); return; }
+            cx.clearRect(0, 0, 512, 512);
+            cx.drawImage(imgs[0], 0, 0);     cx.drawImage(imgs[1], 256, 0);
+            cx.drawImage(imgs[2], 0, 256);   cx.drawImage(imgs[3], 256, 256);
+            res(cx.getImageData(0, 0, 512, 512));
+          }
+        });
+      }
+      Promise.all([stitch('wind-u'), stitch('wind-v')]).then(([uD, vD]) => {
+        if (!uD || !vD) { console.warn('Wind particles: U/V tiles not available'); return; }
+        gl.bindTexture(gl.TEXTURE_2D, wuTex);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 512, 512, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(uD.data.buffer));
+        gl.bindTexture(gl.TEXTURE_2D, wvTex);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 512, 512, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(vD.data.buffer));
+        windLoaded = true;
+        if (mapR) mapR.triggerRepaint();
+      });
+    }
+
+    function makeRamp(gl) {
+      const px = new Uint8Array(256 * 4);
+      for (let i = 0; i < 256; i++) {
+        const s = (i / 255) * 40;
+        let r = 0, g = 0, b = 0, a = 255;
+        for (let j = 0; j < WIND_RAMP.length - 1; j++) {
+          if (s >= WIND_RAMP[j].v && s <= WIND_RAMP[j+1].v) {
+            const t = (s - WIND_RAMP[j].v) / (WIND_RAMP[j+1].v - WIND_RAMP[j].v);
+            r = WIND_RAMP[j].r + t * (WIND_RAMP[j+1].r - WIND_RAMP[j].r);
+            g = WIND_RAMP[j].g + t * (WIND_RAMP[j+1].g - WIND_RAMP[j].g);
+            b = WIND_RAMP[j].b + t * (WIND_RAMP[j+1].b - WIND_RAMP[j].b);
+            break;
+          }
+        }
+        if (s >= WIND_RAMP[WIND_RAMP.length-1].v) {
+          r = WIND_RAMP[WIND_RAMP.length-1].r;
+          g = WIND_RAMP[WIND_RAMP.length-1].g;
+          b = WIND_RAMP[WIND_RAMP.length-1].b;
+        }
+        if (s < 1) a = Math.round(s * 255);
+        px[i*4]=Math.round(r); px[i*4+1]=Math.round(g);
+        px[i*4+2]=Math.round(b); px[i*4+3]=a;
+      }
+      gl.bindTexture(gl.TEXTURE_2D, crTex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 256, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, px);
+    }
+
+    function initParticles(gl) {
+      const d = new Uint8Array(PARTICLE_COUNT * 4);
+      for (let i = 0; i < PARTICLE_COUNT; i++) {
+        const x = WB.x0 + Math.random() * (WB.x1 - WB.x0);
+        const y = WB.y0 + Math.random() * (WB.y1 - WB.y0);
+        const xs = x * 255, ys = y * 255;
+        d[i*4]   = Math.floor(xs);
+        d[i*4+1] = Math.round((xs % 1) * 255);
+        d[i*4+2] = Math.floor(ys);
+        d[i*4+3] = Math.round((ys % 1) * 255);
+      }
+      gl.bindTexture(gl.TEXTURE_2D, pTex0);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, PARTICLE_RES, PARTICLE_RES, 0, gl.RGBA, gl.UNSIGNED_BYTE, d);
+      gl.bindTexture(gl.TEXTURE_2D, pTex1);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, PARTICLE_RES, PARTICLE_RES, 0, gl.RGBA, gl.UNSIGNED_BYTE, d);
+    }
+
+    function resizeScreen(gl) {
+      const w = gl.canvas.width, h = gl.canvas.height;
+      if (w === cw && h === ch) return;
+      cw = w; ch = h;
+      const empty = new Uint8Array(w * h * 4);
+      gl.bindTexture(gl.TEXTURE_2D, sTex0);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, empty);
+      gl.bindTexture(gl.TEXTURE_2D, sTex1);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, empty);
+    }
+
+    function clearTrails() {
+      if (!glR) return;
+      const gl = glR, w = gl.canvas.width, h = gl.canvas.height;
+      const empty = new Uint8Array(w * h * 4);
+      gl.bindTexture(gl.TEXTURE_2D, sTex0);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, empty);
+      gl.bindTexture(gl.TEXTURE_2D, sTex1);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, empty);
+      sIdx = 0;
+    }
+
+    function drawQuad(gl, prog) {
+      const loc = gl.getAttribLocation(prog, 'a_pos');
+      gl.bindBuffer(gl.ARRAY_BUFFER, qBuf);
+      gl.enableVertexAttribArray(loc);
+      gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      gl.disableVertexAttribArray(loc);
+    }
+
+    return {
+      id: 'wind-particles',
+      type: 'custom',
+      renderingMode: '3d',
+
+      onAdd(map, gl) {
+        mapR = map; glR = gl;
+        upProg = glProgram(gl, W_QUAD_VS, W_UPDATE_FS);
+        drProg = glProgram(gl, W_DRAW_VS, W_DRAW_FS);
+        scProg = glProgram(gl, W_QUAD_VS, W_SCREEN_FS);
+        if (!upProg || !drProg || !scProg) return;
+
+        wuTex = glTex(gl, gl.LINEAR);  wvTex = glTex(gl, gl.LINEAR);
+        crTex = glTex(gl, gl.LINEAR);
+        pTex0 = glTex(gl, gl.NEAREST); pTex1 = glTex(gl, gl.NEAREST);
+        sTex0 = glTex(gl, gl.LINEAR);  sTex1 = glTex(gl, gl.LINEAR);
+        fbo = gl.createFramebuffer();
+
+        qBuf = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, qBuf);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+
+        const idx = new Float32Array(PARTICLE_COUNT);
+        for (let i = 0; i < PARTICLE_COUNT; i++) idx[i] = i;
+        iBuf = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, iBuf);
+        gl.bufferData(gl.ARRAY_BUFFER, idx, gl.STATIC_DRAW);
+
+        makeRamp(gl); initParticles(gl);
+
+        map.on('movestart', () => { cameraMoving = true; });
+        map.on('moveend', () => {
+          cameraMoving = false; clearTrails();
+          map.triggerRepaint();
+        });
+
+        loadWind(gl);
+      },
+
+      render(gl, matrix) {
+        if (!layers.wind || !windLoaded || !upProg) return;
+        resizeScreen(gl);
+
+        // Save MapLibre GL state
+        const prevFBO = gl.getParameter(gl.FRAMEBUFFER_BINDING);
+        const prevBlend = gl.isEnabled(gl.BLEND);
+        const prevDepth = gl.isEnabled(gl.DEPTH_TEST);
+        gl.disable(gl.DEPTH_TEST);
+
+        // Pass 1: Update particle positions
+        gl.useProgram(upProg);
+        const curP = pIdx === 0 ? pTex0 : pTex1;
+        const nxtP = pIdx === 0 ? pTex1 : pTex0;
+        glBind(gl, curP, 0);
+        gl.uniform1i(gl.getUniformLocation(upProg, 'u_particles'), 0);
+        glBind(gl, wuTex, 1);
+        gl.uniform1i(gl.getUniformLocation(upProg, 'u_wind_u'), 1);
+        glBind(gl, wvTex, 2);
+        gl.uniform1i(gl.getUniformLocation(upProg, 'u_wind_v'), 2);
+        gl.uniform2f(gl.getUniformLocation(upProg, 'u_wind_min'), WB.x0, WB.y0);
+        gl.uniform2f(gl.getUniformLocation(upProg, 'u_wind_max'), WB.x1, WB.y1);
+        gl.uniform1f(gl.getUniformLocation(upProg, 'u_speed_factor'), 0.000025);
+        gl.uniform1f(gl.getUniformLocation(upProg, 'u_drop_rate'), 0.003);
+        gl.uniform1f(gl.getUniformLocation(upProg, 'u_drop_rate_bump'), 0.00015);
+        gl.uniform1f(gl.getUniformLocation(upProg, 'u_rand_seed'), Math.random());
+
+        gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, nxtP, 0);
+        gl.viewport(0, 0, PARTICLE_RES, PARTICLE_RES);
+        gl.disable(gl.BLEND);
+        drawQuad(gl, upProg);
+        pIdx = 1 - pIdx;
+
+        // Pass 2: Fade previous trail
+        const curS = sIdx === 0 ? sTex0 : sTex1;
+        const nxtS = sIdx === 0 ? sTex1 : sTex0;
+        gl.useProgram(scProg);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, nxtS, 0);
+        gl.viewport(0, 0, cw, ch);
+        glBind(gl, curS, 0);
+        gl.uniform1i(gl.getUniformLocation(scProg, 'u_screen'), 0);
+        gl.uniform1f(gl.getUniformLocation(scProg, 'u_opacity'), cameraMoving ? 0.0 : FADE_OPACITY);
+        drawQuad(gl, scProg);
+
+        // Pass 3: Draw particles onto faded trail
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+        gl.useProgram(drProg);
+        const updP = pIdx === 0 ? pTex0 : pTex1;
+        glBind(gl, updP, 0);
+        gl.uniform1i(gl.getUniformLocation(drProg, 'u_particles'), 0);
+        glBind(gl, wuTex, 1);
+        gl.uniform1i(gl.getUniformLocation(drProg, 'u_wind_u'), 1);
+        glBind(gl, wvTex, 2);
+        gl.uniform1i(gl.getUniformLocation(drProg, 'u_wind_v'), 2);
+        glBind(gl, crTex, 3);
+        gl.uniform1i(gl.getUniformLocation(drProg, 'u_color_ramp'), 3);
+        gl.uniform1f(gl.getUniformLocation(drProg, 'u_particles_res'), PARTICLE_RES);
+        gl.uniform2f(gl.getUniformLocation(drProg, 'u_wind_min'), WB.x0, WB.y0);
+        gl.uniform2f(gl.getUniformLocation(drProg, 'u_wind_max'), WB.x1, WB.y1);
+        gl.uniformMatrix4fv(gl.getUniformLocation(drProg, 'u_matrix'), false, new Float32Array(matrix));
+
+        const aIdx = gl.getAttribLocation(drProg, 'a_index');
+        gl.bindBuffer(gl.ARRAY_BUFFER, iBuf);
+        gl.enableVertexAttribArray(aIdx);
+        gl.vertexAttribPointer(aIdx, 1, gl.FLOAT, false, 0, 0);
+        gl.drawArrays(gl.POINTS, 0, PARTICLE_COUNT);
+        gl.disableVertexAttribArray(aIdx);
+
+        // Pass 4: Composite onto MapLibre's framebuffer
+        gl.bindFramebuffer(gl.FRAMEBUFFER, prevFBO);
+        gl.viewport(0, 0, cw, ch);
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+        gl.useProgram(scProg);
+        glBind(gl, nxtS, 0);
+        gl.uniform1i(gl.getUniformLocation(scProg, 'u_screen'), 0);
+        gl.uniform1f(gl.getUniformLocation(scProg, 'u_opacity'), 1.0);
+        drawQuad(gl, scProg);
+
+        sIdx = 1 - sIdx;
+
+        // Restore MapLibre GL state
+        if (prevDepth) gl.enable(gl.DEPTH_TEST); else gl.disable(gl.DEPTH_TEST);
+        if (prevBlend) gl.enable(gl.BLEND); else gl.disable(gl.BLEND);
+
+        map.triggerRepaint();
+      },
+
+      onRemove(map, gl) {
+        [wuTex, wvTex, crTex, pTex0, pTex1, sTex0, sTex1].forEach(t => t && gl.deleteTexture(t));
+        [qBuf, iBuf].forEach(b => b && gl.deleteBuffer(b));
+        [upProg, drProg, scProg].forEach(p => p && gl.deleteProgram(p));
+        if (fbo) gl.deleteFramebuffer(fbo);
+      },
+
+      reloadWind() {
+        if (glR) { windLoaded = false; loadWind(glR); }
+      }
+    };
+  }
+
   // ─── Add Map Layers (order matters: bottom → top) ───
   map.on('load', () => {
     // Temperature color wash — HRRR tiles from R2 (renders below radar)
@@ -1146,6 +1549,10 @@
         'text-halo-width': 1.5
       }
     });
+
+    // Wind particles (WebGL custom layer — renders below labels)
+    windParticleLayer = createWindParticleLayer();
+    map.addLayer(windParticleLayer, 'temp-labels-layer');
 
     // Wind labels — shows wind speed at grid points
     map.addSource('wind-labels', {
@@ -1777,6 +2184,8 @@
           const ts = Date.now();
           map.getSource('temperature-tiles').setTiles([`${TILE_BASE}/temperature/{z}/{x}/{y}.png?_=${ts}`]);
         }
+        // Reload wind particle textures
+        if (windParticleLayer && windParticleLayer.reloadWind) windParticleLayer.reloadWind();
         setTimeout(updateAllLabels, 1000);
         document.getElementById('freshnessText').textContent =
           `HRRR ${meta.hrrr_hour}Z · MRMS live`;
@@ -1826,7 +2235,7 @@
 
     // Refresh labels when toggled on
     if (layers.temp) updateTempLabels();
-    if (layers.wind) updateWindLabels();
+    if (layers.wind) { updateWindLabels(); map.triggerRepaint(); }
     if (layers.precip) updatePrecipLabels();
 
     // Legend: radar takes priority, then temp

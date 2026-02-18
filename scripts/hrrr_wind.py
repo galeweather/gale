@@ -215,7 +215,7 @@ def main():
         "gdal2tiles.py",
         "--zoom=2-6",
         "--processes=4",
-        "--resampling=nearest",
+        "--resampling=near",
         "--xyz",
         "--exclude",
         WDIR_RGBA, WDIR_OUTPUT_DIR
@@ -255,7 +255,7 @@ def main():
         "gdal2tiles.py",
         "--zoom=2-6",
         "--processes=4",
-        "--resampling=nearest",
+        "--resampling=near",
         "--xyz",
         "--exclude",
         UGRD_RGBA, U_OUTPUT_DIR
@@ -294,7 +294,7 @@ def main():
         "gdal2tiles.py",
         "--zoom=2-6",
         "--processes=4",
-        "--resampling=nearest",
+        "--resampling=near",
         "--xyz",
         "--exclude",
         VGRD_RGBA, V_OUTPUT_DIR
