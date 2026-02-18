@@ -261,6 +261,27 @@
     margin-left: auto;
   }
 
+  .layers-toggle {
+    display: none;
+    pointer-events: auto;
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-panel);
+    backdrop-filter: blur(20px);
+    color: var(--text-secondary);
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all var(--transition);
+    box-shadow: var(--shadow-md);
+  }
+
+  .layers-toggle:hover { border-color: var(--accent); color: var(--accent); }
+  .layers-toggle.active { background: var(--accent-dim); color: var(--accent); border-color: var(--border-active); }
+
   .layer-btn svg { width: 16px; height: 16px; flex-shrink: 0; }
 
   .layer-divider {
@@ -660,9 +681,22 @@
     .top-bar { top: 10px; left: 10px; right: 10px; }
     .logo-badge { display: none; }
     .search-container { max-width: none; }
-    .sidebar { top: auto; bottom: 76px; right: 10px; flex-direction: row; padding: 4px; }
+    .layers-toggle { display: flex; }
+    .sidebar {
+      position: fixed;
+      top: 60px;
+      left: 10px;
+      right: auto;
+      bottom: auto;
+      flex-direction: column;
+      padding: 6px;
+      display: none;
+      z-index: 10;
+    }
+    .sidebar.open { display: flex; }
     .layer-btn { min-width: auto; padding: 8px 10px; }
     .layer-btn span { display: none; }
+    .layer-divider { display: none; }
     .forecast-drawer { left: 10px; right: 10px; }
     .forecast-drawer.open { bottom: 60px; }
     .timeline-bar { padding: 30px 10px 10px; }
@@ -692,6 +726,14 @@
     <span class="logo-text">Gale</span>
     <span class="logo-badge">Alpha</span>
   </div>
+
+  <button class="layers-toggle" id="layersToggle" title="Layers">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+      <polyline points="2 17 12 22 22 17"/>
+      <polyline points="2 12 12 17 22 12"/>
+    </svg>
+  </button>
 
   <div class="search-container">
     <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1521,6 +1563,16 @@
     });
   });
 
+  // ─── Mobile Layers Dropdown ────────────────────
+  const layersToggle = document.getElementById('layersToggle');
+  const sidebar = document.querySelector('.sidebar');
+
+  layersToggle.addEventListener('click', (e) => {
+    e.stopPropagation();
+    sidebar.classList.toggle('open');
+    layersToggle.classList.toggle('active');
+  });
+
   // ─── Search (Nominatim) ─────────────────────
   const searchInput = document.getElementById('searchInput');
   const searchResults = document.getElementById('searchResults');
@@ -1564,6 +1616,10 @@
   const drawer = document.getElementById('forecastDrawer');
 
   map.on('click', async (e) => {
+    // Close mobile layers dropdown
+    sidebar.classList.remove('open');
+    layersToggle.classList.remove('active');
+
     const { lng, lat } = e.lngLat;
 
     // Only fetch forecast for CONUS
@@ -1739,7 +1795,7 @@
     if (e.target.tagName === 'INPUT') return;
     switch(e.key) {
       case '/': e.preventDefault(); searchInput.focus(); break;
-      case 'Escape': drawer.classList.remove('open'); searchResults.classList.remove('active'); searchInput.blur(); break;
+      case 'Escape': drawer.classList.remove('open'); searchResults.classList.remove('active'); searchInput.blur(); sidebar.classList.remove('open'); layersToggle.classList.remove('active'); break;
       case ' ': e.preventDefault(); playBtn.click(); break;
       case 'r': document.querySelector('[data-layer="radar"]').click(); break;
       case 't': document.querySelector('[data-layer="temp"]').click(); break;
