@@ -1569,8 +1569,10 @@
     });
   }
 
+  let tempLabelGen = 0;
   async function updateTempLabels() {
     if (!layers.temp) return;
+    const gen = ++tempLabelGen;
     const bounds = map.getBounds();
     const west = bounds.getWest(), east = bounds.getEast();
     const north = bounds.getNorth(), south = bounds.getSouth();
@@ -1595,13 +1597,16 @@
       }
     }
     await Promise.all(promises);
+    if (gen !== tempLabelGen) return; // stale — newer update in flight
     if (map.getSource('temp-labels')) {
       map.getSource('temp-labels').setData({ type: 'FeatureCollection', features });
     }
   }
 
+  let windLabelGen = 0;
   async function updateWindLabels() {
     if (!layers.wind) return;
+    const gen = ++windLabelGen;
     const bounds = map.getBounds();
     const west = bounds.getWest(), east = bounds.getEast();
     const north = bounds.getNorth(), south = bounds.getSouth();
@@ -1631,13 +1636,16 @@
       }
     }
     await Promise.all(promises);
+    if (gen !== windLabelGen) return;
     if (map.getSource('wind-labels')) {
       map.getSource('wind-labels').setData({ type: 'FeatureCollection', features });
     }
   }
 
+  let precipLabelGen = 0;
   async function updatePrecipLabels() {
     if (!layers.precip) return;
+    const gen = ++precipLabelGen;
     const bounds = map.getBounds();
     const west = bounds.getWest(), east = bounds.getEast();
     const north = bounds.getNorth(), south = bounds.getSouth();
@@ -1669,6 +1677,7 @@
       }
     }
     await Promise.all(promises);
+    if (gen !== precipLabelGen) return;
     if (map.getSource('precip-labels')) {
       map.getSource('precip-labels').setData({ type: 'FeatureCollection', features });
     }
@@ -1680,8 +1689,13 @@
     updatePrecipLabels();
   }
 
-  map.on('moveend', updateAllLabels);
-  map.on('zoomend', updateAllLabels);
+  let labelDebounce = null;
+  function debouncedUpdateLabels() {
+    clearTimeout(labelDebounce);
+    labelDebounce = setTimeout(updateAllLabels, 300);
+  }
+  map.on('moveend', debouncedUpdateLabels);
+  map.on('zoomend', debouncedUpdateLabels);
   setTimeout(updateAllLabels, 2000); // initial load
 
   // ─── Fetch NWS Alerts ───────────────────────

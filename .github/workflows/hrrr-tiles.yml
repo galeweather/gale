@@ -34,7 +34,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
         run: |
-          for layer in temperature wind precipitation wind-direction; do
+          for layer in temperature wind precipitation wind-direction wind-u wind-v; do
             echo "Syncing ${layer} tiles..."
 
             # Sync tile PNGs with 1-hour cache

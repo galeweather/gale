@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
-"""Gale Phase 2: HRRR 10m Wind Speed → Color-ramped Slippy Map tiles.
+"""Gale Phase 2: HRRR 10m Wind → Color-ramped Slippy Map tiles.
 
 Downloads the latest HRRR analysis (f00) for 10m UGRD and VGRD from NOMADS,
-computes wind speed from components, processes through GDAL to produce RGBA
-PNG tiles at zoom 2-6, and writes a metadata.json with generation info.
+produces four tile sets:
+  - wind/        Wind speed (color-ramped)
+  - wind-direction/  Wind direction (grayscale-encoded 0-360°)
+  - wind-u/      U component (grayscale-encoded -40 to +40 m/s)
+  - wind-v/      V component (grayscale-encoded -40 to +40 m/s)
 
 No pip dependencies — uses only stdlib + GDAL CLI tools.
 """
@@ -20,8 +23,12 @@ from urllib.error import URLError
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_DIR = os.path.join(SCRIPT_DIR, "output", "wind")
 WDIR_OUTPUT_DIR = os.path.join(SCRIPT_DIR, "output", "wind-direction")
+U_OUTPUT_DIR = os.path.join(SCRIPT_DIR, "output", "wind-u")
+V_OUTPUT_DIR = os.path.join(SCRIPT_DIR, "output", "wind-v")
 RAMP_FILE = os.path.join(SCRIPT_DIR, "wind_ramp.txt")
 WDIR_RAMP_FILE = os.path.join(SCRIPT_DIR, "wind_direction_ramp.txt")
+U_RAMP_FILE = os.path.join(SCRIPT_DIR, "wind_u_ramp.txt")
+V_RAMP_FILE = os.path.join(SCRIPT_DIR, "wind_v_ramp.txt")
 UGRD_GRIB = os.path.join(SCRIPT_DIR, "hrrr_ugrd.grib2")
 VGRD_GRIB = os.path.join(SCRIPT_DIR, "hrrr_vgrd.grib2")
 UGRD_TIF = os.path.join(SCRIPT_DIR, "hrrr_ugrd.tif")
@@ -30,6 +37,8 @@ WSPD_TIF = os.path.join(SCRIPT_DIR, "hrrr_wspd.tif")
 RGBA_FILE = os.path.join(SCRIPT_DIR, "hrrr_wspd_rgba.tif")
 WDIR_TIF = os.path.join(SCRIPT_DIR, "hrrr_wdir.tif")
 WDIR_RGBA = os.path.join(SCRIPT_DIR, "hrrr_wdir_rgba.tif")
+UGRD_RGBA = os.path.join(SCRIPT_DIR, "hrrr_ugrd_rgba.tif")
+VGRD_RGBA = os.path.join(SCRIPT_DIR, "hrrr_vgrd_rgba.tif")
 
 NOMADS_BASE = "https://nomads.ncep.noaa.gov/cgi-bin/filter_hrrr_2d.pl"
 
@@ -230,8 +239,88 @@ def main():
         json.dump(wdir_metadata, f, indent=2)
     print(f"Wrote {wdir_meta_path}")
 
+    # ── U/V Component Tiles (for wind particle animation) ──────
+    # U component: grayscale-encoded -40 to +40 m/s (128 = 0 m/s)
+    run_cmd([
+        "gdaldem", "color-relief",
+        UGRD_TIF, U_RAMP_FILE, UGRD_RGBA,
+        "-alpha", "-of", "GTiff"
+    ], "U-component color relief → RGBA")
+
+    if os.path.exists(U_OUTPUT_DIR):
+        shutil.rmtree(U_OUTPUT_DIR)
+    os.makedirs(U_OUTPUT_DIR, exist_ok=True)
+
+    run_cmd([
+        "gdal2tiles.py",
+        "--zoom=2-6",
+        "--processes=4",
+        "--resampling=nearest",
+        "--xyz",
+        "--exclude",
+        UGRD_RGBA, U_OUTPUT_DIR
+    ], "Rendering U-component tiles (zoom 2-6)")
+
+    u_tile_count = count_tiles(U_OUTPUT_DIR)
+    print(f"Generated {u_tile_count} U-component tiles in {U_OUTPUT_DIR}")
+
+    u_metadata = {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "hrrr_run": f"{date_str} {hour_str}Z",
+        "hrrr_date": date_str,
+        "hrrr_hour": hour_str,
+        "zoom_range": "2-6",
+        "tile_count": u_tile_count,
+        "variable": "UGRD:10m above ground (u-component)",
+        "encoding": "grayscale: pixel / 255 * 80 - 40 = m/s"
+    }
+    u_meta_path = os.path.join(U_OUTPUT_DIR, "metadata.json")
+    with open(u_meta_path, "w") as f:
+        json.dump(u_metadata, f, indent=2)
+    print(f"Wrote {u_meta_path}")
+
+    # V component: grayscale-encoded -40 to +40 m/s (128 = 0 m/s)
+    run_cmd([
+        "gdaldem", "color-relief",
+        VGRD_TIF, V_RAMP_FILE, VGRD_RGBA,
+        "-alpha", "-of", "GTiff"
+    ], "V-component color relief → RGBA")
+
+    if os.path.exists(V_OUTPUT_DIR):
+        shutil.rmtree(V_OUTPUT_DIR)
+    os.makedirs(V_OUTPUT_DIR, exist_ok=True)
+
+    run_cmd([
+        "gdal2tiles.py",
+        "--zoom=2-6",
+        "--processes=4",
+        "--resampling=nearest",
+        "--xyz",
+        "--exclude",
+        VGRD_RGBA, V_OUTPUT_DIR
+    ], "Rendering V-component tiles (zoom 2-6)")
+
+    v_tile_count = count_tiles(V_OUTPUT_DIR)
+    print(f"Generated {v_tile_count} V-component tiles in {V_OUTPUT_DIR}")
+
+    v_metadata = {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "hrrr_run": f"{date_str} {hour_str}Z",
+        "hrrr_date": date_str,
+        "hrrr_hour": hour_str,
+        "zoom_range": "2-6",
+        "tile_count": v_tile_count,
+        "variable": "VGRD:10m above ground (v-component)",
+        "encoding": "grayscale: pixel / 255 * 80 - 40 = m/s"
+    }
+    v_meta_path = os.path.join(V_OUTPUT_DIR, "metadata.json")
+    with open(v_meta_path, "w") as f:
+        json.dump(v_metadata, f, indent=2)
+    print(f"Wrote {v_meta_path}")
+
     # Cleanup intermediate files
-    for f in [UGRD_GRIB, VGRD_GRIB, UGRD_TIF, VGRD_TIF, WSPD_TIF, RGBA_FILE, WDIR_TIF, WDIR_RGBA]:
+    for f in [UGRD_GRIB, VGRD_GRIB, UGRD_TIF, VGRD_TIF, WSPD_TIF, RGBA_FILE,
+              WDIR_TIF, WDIR_RGBA, UGRD_RGBA, VGRD_RGBA]:
         if os.path.exists(f):
             os.remove(f)
 
