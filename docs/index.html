@@ -771,14 +771,14 @@
     <span>Temp</span>
   </button>
 
-  <button class="layer-btn coming-soon" data-layer="wind" title="Wind — coming soon">
+  <button class="layer-btn" data-layer="wind" title="Wind">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
       <path d="M9.59 4.59A2 2 0 1111 8H2"/><path d="M12.59 19.41A2 2 0 1014 16H2"/><path d="M17.73 7.73A2.5 2.5 0 1119.5 12H2"/>
     </svg>
     <span>Wind</span>
   </button>
 
-  <button class="layer-btn coming-soon" data-layer="precip" title="Precipitation — coming soon">
+  <button class="layer-btn" data-layer="precip" title="Precipitation">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
       <path d="M12 2.69l5.66 5.66a8 8 0 11-11.31 0z"/>
     </svg>
@@ -976,6 +976,52 @@
         'raster-opacity': 0.25,
         'raster-fade-duration': 300
       }
+    });
+
+    // HRRR Wind — Cloudflare R2 tiles
+    map.addSource('wind', {
+      type: 'raster',
+      tiles: [
+        `${TILE_BASE}/wind/{z}/{x}/{y}.png`
+      ],
+      tileSize: 256,
+      minzoom: 2,
+      maxzoom: 6,
+      attribution: '&copy; NOAA HRRR via Gale'
+    });
+
+    map.addLayer({
+      id: 'wind-layer',
+      type: 'raster',
+      source: 'wind',
+      paint: {
+        'raster-opacity': 0.25,
+        'raster-fade-duration': 300
+      },
+      layout: { visibility: 'none' }
+    });
+
+    // HRRR Precipitation — Cloudflare R2 tiles
+    map.addSource('precipitation', {
+      type: 'raster',
+      tiles: [
+        `${TILE_BASE}/precipitation/{z}/{x}/{y}.png`
+      ],
+      tileSize: 256,
+      minzoom: 2,
+      maxzoom: 6,
+      attribution: '&copy; NOAA HRRR via Gale'
+    });
+
+    map.addLayer({
+      id: 'precipitation-layer',
+      type: 'raster',
+      source: 'precipitation',
+      paint: {
+        'raster-opacity': 0.25,
+        'raster-fade-duration': 300
+      },
+      layout: { visibility: 'none' }
     });
 
     // MRMS Radar — Iowa State Mesonet (renders on top of temperature/wind/precip)
@@ -1503,11 +1549,13 @@
         // Clear in-memory pixel-sampling cache
         Object.keys(tileCache).forEach(k => delete tileCache[k]);
         const ts = Date.now();
-        if (map.getSource('temperature')) {
-          map.getSource('temperature').setTiles([
-            `${TILE_BASE}/temperature/{z}/{x}/{y}.png?_=${ts}`
-          ]);
-        }
+        ['temperature', 'wind', 'precipitation'].forEach(src => {
+          if (map.getSource(src)) {
+            map.getSource(src).setTiles([
+              `${TILE_BASE}/${src}/{z}/{x}/{y}.png?_=${ts}`
+            ]);
+          }
+        });
         setTimeout(updateTempLabels, 1000);
         document.getElementById('freshnessText').textContent =
           `HRRR ${meta.hrrr_hour}Z · MRMS live`;
@@ -1534,6 +1582,20 @@
     if (map.getLayer('temp-labels-layer')) {
       map.setLayoutProperty('temp-labels-layer', 'visibility', layers.temp ? 'visible' : 'none');
     }
+    if (map.getLayer('wind-layer')) {
+      map.setLayoutProperty('wind-layer', 'visibility', layers.wind ? 'visible' : 'none');
+      if (layers.wind) {
+        const windOpacity = layers.radar ? 0.25 : 0.6;
+        map.setPaintProperty('wind-layer', 'raster-opacity', windOpacity);
+      }
+    }
+    if (map.getLayer('precipitation-layer')) {
+      map.setLayoutProperty('precipitation-layer', 'visibility', layers.precip ? 'visible' : 'none');
+      if (layers.precip) {
+        const precipOpacity = layers.radar ? 0.25 : 0.6;
+        map.setPaintProperty('precipitation-layer', 'raster-opacity', precipOpacity);
+      }
+    }
     if (map.getLayer('satellite-layer')) {
       map.setLayoutProperty('satellite-layer', 'visibility', layers.satellite ? 'visible' : 'none');
     }
@@ -1553,6 +1615,16 @@
       grad.className = 'legend-gradient radar';
       lMin.textContent = 'Light';
       lMax.textContent = 'Heavy';
+    } else if (layers.precip) {
+      legend.classList.add('visible');
+      grad.className = 'legend-gradient precip';
+      lMin.textContent = '0 mm';
+      lMax.textContent = '50 mm';
+    } else if (layers.wind) {
+      legend.classList.add('visible');
+      grad.className = 'legend-gradient wind';
+      lMin.textContent = '0 mph';
+      lMax.textContent = '90 mph';
     } else if (layers.temp) {
       legend.classList.add('visible');
       grad.className = 'legend-gradient temp';
@@ -1808,6 +1880,8 @@
       case ' ': e.preventDefault(); playBtn.click(); break;
       case 'r': document.querySelector('[data-layer="radar"]').click(); break;
       case 't': document.querySelector('[data-layer="temp"]').click(); break;
+      case 'w': document.querySelector('[data-layer="wind"]').click(); break;
+      case 'p': document.querySelector('[data-layer="precip"]').click(); break;
       case 's': document.querySelector('[data-layer="satellite"]').click(); break;
     }
   });
