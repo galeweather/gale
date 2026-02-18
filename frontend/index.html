@@ -676,6 +676,45 @@
   .locate-btn:hover { border-color: var(--accent); color: var(--accent); }
 
   /* ═══════════════════════════════════════════
+     USER LOCATION DOT
+     ═══════════════════════════════════════════ */
+  .user-location-marker {
+    width: 18px;
+    height: 18px;
+    position: relative;
+  }
+
+  .user-location-dot {
+    width: 14px;
+    height: 14px;
+    background: var(--accent);
+    border: 2px solid #fff;
+    border-radius: 50%;
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    z-index: 2;
+    box-shadow: 0 0 6px rgba(56, 189, 248, 0.6);
+  }
+
+  .user-location-pulse {
+    width: 18px;
+    height: 18px;
+    background: rgba(56, 189, 248, 0.3);
+    border-radius: 50%;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 1;
+    animation: loc-pulse 2s ease-out infinite;
+  }
+
+  @keyframes loc-pulse {
+    0% { transform: scale(1); opacity: 0.6; }
+    100% { transform: scale(3); opacity: 0; }
+  }
+
+  /* ═══════════════════════════════════════════
      MOBILE RESPONSIVE
      ═══════════════════════════════════════════ */
   @media (max-width: 640px) {
@@ -703,7 +742,7 @@
     .timeline-bar { padding: 30px 10px 10px; }
     .legend { left: 10px; bottom: 66px; }
     .freshness { bottom: 66px; right: 10px; }
-    .locate-btn { display: none; }
+    .locate-btn { bottom: 66px; right: 60px; }
   }
 </style>
 </head>
@@ -2031,14 +2070,27 @@
   });
 
   // ─── Locate Me ──────────────────────────────
+  let userLocationMarker = null;
+
+  function setUserLocationMarker(lng, lat) {
+    if (userLocationMarker) userLocationMarker.remove();
+    const el = document.createElement('div');
+    el.className = 'user-location-marker';
+    el.innerHTML = '<div class="user-location-pulse"></div><div class="user-location-dot"></div>';
+    userLocationMarker = new maplibregl.Marker({ element: el }).setLngLat([lng, lat]).addTo(map);
+  }
+
   document.getElementById('locateBtn').addEventListener('click', () => {
     if ('geolocation' in navigator) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
-          map.flyTo({
-            center: [pos.coords.longitude, pos.coords.latitude],
-            zoom: 8,
-            duration: 1500
+          const lng = pos.coords.longitude;
+          const lat = pos.coords.latitude;
+          map.flyTo({ center: [lng, lat], zoom: 8, duration: 1500 });
+          setUserLocationMarker(lng, lat);
+          // Trigger forecast card like a map click
+          map.once('moveend', () => {
+            map.fire('click', { lngLat: { lng, lat }, point: map.project([lng, lat]), originalEvent: new MouseEvent('click') });
           });
         },
         () => console.warn('Location access denied')
