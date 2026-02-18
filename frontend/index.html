@@ -477,24 +477,47 @@
 
   .timeline-future {
     flex: 0 0 48%;
-    height: 4px;
-    background: rgba(255, 255, 255, 0.06);
-    border-radius: 2px;
     position: relative;
-    align-self: center;
+    display: flex;
+    align-items: center;
+  }
+
+  .timeline-slider-future {
+    width: 100%;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 4px;
+    background: rgba(255, 170, 56, 0.3);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+
+  .timeline-slider-future::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #ffaa38;
+    box-shadow: 0 0 10px rgba(255, 170, 56, 0.4);
+    cursor: grab;
+    transition: transform 0.15s ease;
+  }
+
+  .timeline-slider-future::-webkit-slider-thumb:hover {
+    transform: scale(1.3);
   }
 
   .timeline-future-label {
     position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
+    top: -16px;
+    right: 0;
     font-family: var(--mono);
     font-size: 9px;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: var(--text-muted);
-    opacity: 0.5;
+    color: #ffaa38;
     white-space: nowrap;
   }
 
@@ -1080,16 +1103,17 @@
         </div>
         <div class="timeline-now"></div>
         <div class="timeline-future">
-          <span class="timeline-future-label">+48h forecast coming</span>
+          <input class="timeline-slider-future" type="range" min="0" max="60" value="0" id="futureSlider" aria-label="Forecast timeline" aria-valuetext="Now">
+          <span class="timeline-future-label" id="futureLabel">Now</span>
         </div>
       </div>
       <div class="timeline-ticks">
         <span class="timeline-tick">-50m</span>
         <span class="timeline-tick">-25m</span>
         <span class="timeline-tick now">NOW</span>
-        <span class="timeline-tick future">+12h</span>
-        <span class="timeline-tick future">+24h</span>
-        <span class="timeline-tick future">+48h</span>
+        <span class="timeline-tick future">+20m</span>
+        <span class="timeline-tick future">+40m</span>
+        <span class="timeline-tick future">+60m</span>
       </div>
     </div>
   </div>
@@ -1178,7 +1202,10 @@
   // ─── HRRR Crossfade State ───────────────────
   let currentTempSourceId = 'temperature-tiles';
   let currentTempLayerId = 'temperature-layer';
+  let currentTempF01SourceId = 'temperature-f01-tiles';
+  let currentTempF01LayerId = 'temperature-f01-layer';
   let hrrrSwapGen = 0;
+  let forecastT = 0;  // 0 = f00 (now), 1 = f01 (+1h)
 
   // ─── Layer State ────────────────────────────
   const layers = {
@@ -1617,6 +1644,25 @@
         'raster-opacity': 0.7,
         'raster-fade-duration': 300
       }
+    });
+
+    // Temperature +1h forecast overlay (f01, starts hidden at opacity 0)
+    map.addSource('temperature-f01-tiles', {
+      type: 'raster',
+      tiles: [`${TILE_BASE}/temperature-f01/{z}/{x}/{y}.png`],
+      tileSize: 256,
+      maxzoom: 6
+    });
+
+    map.addLayer({
+      id: 'temperature-f01-layer',
+      type: 'raster',
+      source: 'temperature-f01-tiles',
+      paint: {
+        'raster-opacity': 0,
+        'raster-fade-duration': 300
+      },
+      layout: { visibility: layers.temp ? 'visible' : 'none' }
     });
 
     // MRMS Radar — Iowa State Mesonet (renders on top of temperature/wind/precip)
@@ -2151,7 +2197,7 @@
     const converter = layerPath === 'wind' ? rgbToWindMph
                     : layerPath === 'precipitation' ? rgbToPrecipIn
                     : layerPath === 'wind-direction' ? rgbToWindDir
-                    : rgbToTempF;
+                    : rgbToTempF;  // covers 'temperature' and 'temperature-f01'
 
     return new Promise((resolve) => {
       const z = Math.min(Math.floor(map.getZoom()), 6);
@@ -2201,15 +2247,30 @@
       for (let col = 0.3; col < cols; col++) {
         const lng = west + col * lngStep;
         const lat = south + row * latStep;
-        promises.push(sampleTileAt(lng, lat, 'temperature').then(tempF => {
-          if (tempF !== null) {
-            features.push({
-              type: 'Feature',
-              geometry: { type: 'Point', coordinates: [lng, lat] },
-              properties: { label: `${tempF}°F` }
+        const samplePromise = forecastT > 0
+          ? Promise.all([
+              sampleTileAt(lng, lat, 'temperature'),
+              sampleTileAt(lng, lat, 'temperature-f01')
+            ]).then(([f00, f01]) => {
+              if (f00 !== null) {
+                const val = f01 !== null ? Math.round(f00 * (1 - forecastT) + f01 * forecastT) : f00;
+                features.push({
+                  type: 'Feature',
+                  geometry: { type: 'Point', coordinates: [lng, lat] },
+                  properties: { label: `${val}°F` }
+                });
+              }
+            })
+          : sampleTileAt(lng, lat, 'temperature').then(tempF => {
+              if (tempF !== null) {
+                features.push({
+                  type: 'Feature',
+                  geometry: { type: 'Point', coordinates: [lng, lat] },
+                  properties: { label: `${tempF}°F` }
+                });
+              }
             });
-          }
-        }));
+        promises.push(samplePromise);
       }
     }
     await Promise.all(promises);
@@ -2357,6 +2418,18 @@
       `HRRR ${storedHrrr.hour}Z · MRMS live`;
   }
 
+  function applyForecastInterpolation() {
+    const baseOpacity = layers.radar ? 0.25 : 0.7;
+    const f00Opacity = baseOpacity * (1 - forecastT);
+    const f01Opacity = baseOpacity * forecastT;
+    if (map.getLayer(currentTempLayerId)) {
+      map.setPaintProperty(currentTempLayerId, 'raster-opacity', f00Opacity);
+    }
+    if (map.getLayer(currentTempF01LayerId)) {
+      map.setPaintProperty(currentTempF01LayerId, 'raster-opacity', f01Opacity);
+    }
+  }
+
   function nextHrrrAvailable() {
     // HRRR publishes hourly, available ~20 min after the hour.
     // Given the last known run, calculate when a newer one might exist.
@@ -2370,12 +2443,13 @@
 
   function crossfadeTemperature(ts) {
     const gen = ++hrrrSwapGen;
+
+    // ── f00 crossfade ──
     const oldSourceId = currentTempSourceId;
     const oldLayerId = currentTempLayerId;
     const newSourceId = `temperature-tiles-${gen}`;
     const newLayerId = `temperature-layer-${gen}`;
 
-    // Add new source with cache-busted URL
     map.addSource(newSourceId, {
       type: 'raster',
       tiles: [`${TILE_BASE}/temperature/{z}/{x}/{y}.png?_=${ts}`],
@@ -2383,10 +2457,6 @@
       maxzoom: 6
     });
 
-    // Determine target opacity
-    const targetOpacity = layers.radar ? 0.25 : 0.7;
-
-    // Add new layer at opacity 0, positioned below radar
     map.addLayer({
       id: newLayerId,
       type: 'raster',
@@ -2398,23 +2468,55 @@
       layout: { visibility: layers.temp ? 'visible' : 'none' }
     }, 'radar-layer');
 
-    // Update tracked IDs immediately
     currentTempSourceId = newSourceId;
     currentTempLayerId = newLayerId;
 
-    // Once tiles load, crossfade
+    // ── f01 crossfade ──
+    const oldF01SourceId = currentTempF01SourceId;
+    const oldF01LayerId = currentTempF01LayerId;
+    const newF01SourceId = `temperature-f01-tiles-${gen}`;
+    const newF01LayerId = `temperature-f01-layer-${gen}`;
+
+    map.addSource(newF01SourceId, {
+      type: 'raster',
+      tiles: [`${TILE_BASE}/temperature-f01/{z}/{x}/{y}.png?_=${ts}`],
+      tileSize: 256,
+      maxzoom: 6
+    });
+
+    map.addLayer({
+      id: newF01LayerId,
+      type: 'raster',
+      source: newF01SourceId,
+      paint: {
+        'raster-opacity': 0,
+        'raster-fade-duration': 0
+      },
+      layout: { visibility: layers.temp ? 'visible' : 'none' }
+    }, 'radar-layer');
+
+    currentTempF01SourceId = newF01SourceId;
+    currentTempF01LayerId = newF01LayerId;
+
+    // Once tiles load, crossfade both layers
     map.once('idle', () => {
       if (hrrrSwapGen !== gen) return; // superseded
-      // Fade new in
-      map.setPaintProperty(newLayerId, 'raster-opacity', targetOpacity);
-      // Fade old out
+      // Apply interpolation-aware opacities
+      applyForecastInterpolation();
+      // Fade old f00 out
       if (map.getLayer(oldLayerId)) {
         map.setPaintProperty(oldLayerId, 'raster-opacity', 0);
+      }
+      // Fade old f01 out
+      if (map.getLayer(oldF01LayerId)) {
+        map.setPaintProperty(oldF01LayerId, 'raster-opacity', 0);
       }
       // Clean up old after transition
       setTimeout(() => {
         if (map.getLayer(oldLayerId)) map.removeLayer(oldLayerId);
         if (map.getSource(oldSourceId)) map.removeSource(oldSourceId);
+        if (map.getLayer(oldF01LayerId)) map.removeLayer(oldF01LayerId);
+        if (map.getSource(oldF01SourceId)) map.removeSource(oldF01SourceId);
       }, 800);
     });
   }
@@ -2473,9 +2575,12 @@
     // Temperature raster overlay (uses tracked IDs for crossfade)
     if (map.getLayer(currentTempLayerId)) {
       map.setLayoutProperty(currentTempLayerId, 'visibility', layers.temp ? 'visible' : 'none');
-      if (layers.temp) {
-        map.setPaintProperty(currentTempLayerId, 'raster-opacity', layers.radar ? 0.25 : 0.7);
-      }
+    }
+    if (map.getLayer(currentTempF01LayerId)) {
+      map.setLayoutProperty(currentTempF01LayerId, 'visibility', layers.temp ? 'visible' : 'none');
+    }
+    if (layers.temp) {
+      applyForecastInterpolation();
     }
 
     // HRRR layers: label visibility
@@ -2734,11 +2839,23 @@
     drawer.setAttribute('aria-hidden', 'false');
 
     // Phase 1: Instant HRRR tile sampling (parallel, <200ms)
-    const [tempF, windMph, precipIn] = await Promise.all([
+    const samples = [
       sampleTileAt(lng, lat, 'temperature'),
       sampleTileAt(lng, lat, 'wind'),
       sampleTileAt(lng, lat, 'precipitation')
-    ]);
+    ];
+    if (forecastT > 0) samples.push(sampleTileAt(lng, lat, 'temperature-f01'));
+    const results = await Promise.all(samples);
+    const tempF00 = results[0];
+    const windMph = results[1];
+    const precipIn = results[2];
+    const tempF01 = forecastT > 0 ? results[3] : null;
+
+    // Interpolate temperature if future slider is active
+    let tempF = tempF00;
+    if (tempF00 !== null && tempF01 !== null && forecastT > 0) {
+      tempF = Math.round(tempF00 * (1 - forecastT) + tempF01 * forecastT);
+    }
 
     if (tempF !== null) {
       document.getElementById('forecastTemp').innerHTML = `${tempF}<span>°F</span>`;
@@ -2839,6 +2956,19 @@
   setTimeout(positionTimeLabel, 100);
   window.addEventListener('resize', positionTimeLabel);
 
+  // ─── Future Slider (f00 → f01 interpolation) ──────
+  const futureSlider = document.getElementById('futureSlider');
+  const futureLabel = document.getElementById('futureLabel');
+
+  futureSlider.addEventListener('input', () => {
+    const minutes = parseInt(futureSlider.value);
+    forecastT = minutes / 60;
+    futureLabel.textContent = minutes === 0 ? 'Now' : `+${minutes}m`;
+    futureSlider.setAttribute('aria-valuetext', minutes === 0 ? 'Now' : `+${minutes} minutes`);
+    applyForecastInterpolation();
+    updateTempLabels();
+  });
+
   function updateRadarFrame(radarIdx) {
     if (!map.getSource('radar')) return;
     const product = radarProducts[radarIdx];
@@ -2861,6 +2991,12 @@
     playBtn.setAttribute('aria-label', playing ? 'Pause radar animation' : 'Play radar animation');
     if (playing) {
       playBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="3" width="4" height="18"/><rect x="15" y="3" width="4" height="18"/></svg>';
+      // Reset future slider when playing radar animation
+      futureSlider.value = 0;
+      forecastT = 0;
+      futureLabel.textContent = 'Now';
+      futureSlider.setAttribute('aria-valuetext', 'Now');
+      applyForecastInterpolation();
       // Start from oldest (left), play right toward now
       let frame = 0;
       timeSlider.value = frame;
