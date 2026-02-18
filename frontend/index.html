@@ -635,20 +635,8 @@
     border-radius: 4px;
   }
 
-  .legend-gradient.temp {
-    background: linear-gradient(to right, #1e3a5f, #2563eb, #06b6d4, #10b981, #84cc16, #eab308, #f97316, #ef4444, #991b1b);
-  }
-
   .legend-gradient.radar {
     background: linear-gradient(to right, #00000000, #00ff00, #ffff00, #ff8800, #ff0000, #ff00ff);
-  }
-
-  .legend-gradient.wind {
-    background: linear-gradient(to right, #c8e6ff, #64b4ff, #3278e6, #32c864, #e6e632, #e69618, #e6501e, #c81e1e, #960050);
-  }
-
-  .legend-gradient.precip {
-    background: linear-gradient(to right, #aadcaa, #64c864, #32b432, #3296ff, #1e64e6, #c8c832, #e6821e, #c81e32);
   }
 
   .legend-labels {
@@ -966,72 +954,6 @@
 
   // ─── Add Map Layers (order matters: bottom → top) ───
   map.on('load', () => {
-    // HRRR Temperature — Cloudflare R2 tiles (base layer, renders below radar)
-    map.addSource('temperature', {
-      type: 'raster',
-      tiles: [
-        `${TILE_BASE}/temperature/{z}/{x}/{y}.png`
-      ],
-      tileSize: 256,
-      minzoom: 2,
-      maxzoom: 6,
-      attribution: '&copy; NOAA HRRR via Gale'
-    });
-
-    map.addLayer({
-      id: 'temperature-layer',
-      type: 'raster',
-      source: 'temperature',
-      paint: {
-        'raster-opacity': 0.3,
-        'raster-fade-duration': 300
-      }
-    });
-
-    // HRRR Wind — Cloudflare R2 tiles
-    map.addSource('wind', {
-      type: 'raster',
-      tiles: [
-        `${TILE_BASE}/wind/{z}/{x}/{y}.png`
-      ],
-      tileSize: 256,
-      minzoom: 2,
-      maxzoom: 6,
-      attribution: '&copy; NOAA HRRR via Gale'
-    });
-
-    map.addLayer({
-      id: 'wind-layer',
-      type: 'raster',
-      source: 'wind',
-      paint: {
-        'raster-opacity': 0.5,
-        'raster-fade-duration': 300
-      }
-    });
-
-    // HRRR Precipitation — Cloudflare R2 tiles
-    map.addSource('precipitation', {
-      type: 'raster',
-      tiles: [
-        `${TILE_BASE}/precipitation/{z}/{x}/{y}.png`
-      ],
-      tileSize: 256,
-      minzoom: 2,
-      maxzoom: 6,
-      attribution: '&copy; NOAA HRRR via Gale'
-    });
-
-    map.addLayer({
-      id: 'precipitation-layer',
-      type: 'raster',
-      source: 'precipitation',
-      paint: {
-        'raster-opacity': 0.5,
-        'raster-fade-duration': 300
-      }
-    });
-
     // MRMS Radar — Iowa State Mesonet (renders on top of temperature/wind/precip)
     map.addSource('radar', {
       type: 'raster',
@@ -1149,6 +1071,56 @@
       id: 'temp-labels-layer',
       type: 'symbol',
       source: 'temp-labels',
+      layout: {
+        'text-field': ['get', 'label'],
+        'text-size': 13,
+        'text-font': ['Noto Sans Bold'],
+        'text-allow-overlap': false,
+        'text-ignore-placement': false,
+        'text-padding': 8
+      },
+      paint: {
+        'text-color': '#ffffff',
+        'text-halo-color': 'rgba(0, 0, 0, 0.7)',
+        'text-halo-width': 1.5
+      }
+    });
+
+    // Wind labels — shows wind speed at grid points
+    map.addSource('wind-labels', {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: [] }
+    });
+
+    map.addLayer({
+      id: 'wind-labels-layer',
+      type: 'symbol',
+      source: 'wind-labels',
+      layout: {
+        'text-field': ['get', 'label'],
+        'text-size': 13,
+        'text-font': ['Noto Sans Bold'],
+        'text-allow-overlap': false,
+        'text-ignore-placement': false,
+        'text-padding': 8
+      },
+      paint: {
+        'text-color': '#ffffff',
+        'text-halo-color': 'rgba(0, 0, 0, 0.7)',
+        'text-halo-width': 1.5
+      }
+    });
+
+    // Precipitation labels — shows precip amounts at grid points
+    map.addSource('precip-labels', {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: [] }
+    });
+
+    map.addLayer({
+      id: 'precip-labels-layer',
+      type: 'symbol',
+      source: 'precip-labels',
       layout: {
         'text-field': ['get', 'label'],
         'text-size': 13,
@@ -1478,9 +1450,78 @@
     }
   }
 
-  map.on('moveend', updateTempLabels);
-  map.on('zoomend', updateTempLabels);
-  setTimeout(updateTempLabels, 2000); // initial load
+  async function updateWindLabels() {
+    if (!layers.wind) return;
+    const bounds = map.getBounds();
+    const west = bounds.getWest(), east = bounds.getEast();
+    const north = bounds.getNorth(), south = bounds.getSouth();
+    const lngStep = (east - west) / 4;
+    const latStep = (north - south) / 3;
+
+    const features = [];
+    const promises = [];
+    for (let row = 0.5; row < 3; row++) {
+      for (let col = 0.5; col < 4; col++) {
+        const lng = west + col * lngStep;
+        const lat = south + row * latStep;
+        promises.push(sampleTileAt(lng, lat, 'wind').then(mph => {
+          if (mph !== null && mph > 1) {
+            features.push({
+              type: 'Feature',
+              geometry: { type: 'Point', coordinates: [lng, lat] },
+              properties: { label: `${mph} mph` }
+            });
+          }
+        }));
+      }
+    }
+    await Promise.all(promises);
+    if (map.getSource('wind-labels')) {
+      map.getSource('wind-labels').setData({ type: 'FeatureCollection', features });
+    }
+  }
+
+  async function updatePrecipLabels() {
+    if (!layers.precip) return;
+    const bounds = map.getBounds();
+    const west = bounds.getWest(), east = bounds.getEast();
+    const north = bounds.getNorth(), south = bounds.getSouth();
+    const lngStep = (east - west) / 4;
+    const latStep = (north - south) / 3;
+
+    const features = [];
+    const promises = [];
+    for (let row = 0.5; row < 3; row++) {
+      for (let col = 0.5; col < 4; col++) {
+        const lng = west + col * lngStep;
+        const lat = south + row * latStep;
+        promises.push(sampleTileAt(lng, lat, 'precipitation').then(inches => {
+          if (inches !== null && inches > 0) {
+            const label = inches < 0.01 ? 'Trace' : `${inches} in`;
+            features.push({
+              type: 'Feature',
+              geometry: { type: 'Point', coordinates: [lng, lat] },
+              properties: { label }
+            });
+          }
+        }));
+      }
+    }
+    await Promise.all(promises);
+    if (map.getSource('precip-labels')) {
+      map.getSource('precip-labels').setData({ type: 'FeatureCollection', features });
+    }
+  }
+
+  function updateAllLabels() {
+    updateTempLabels();
+    updateWindLabels();
+    updatePrecipLabels();
+  }
+
+  map.on('moveend', updateAllLabels);
+  map.on('zoomend', updateAllLabels);
+  setTimeout(updateAllLabels, 2000); // initial load
 
   // ─── Fetch NWS Alerts ───────────────────────
   async function fetchAlerts() {
@@ -1556,15 +1597,7 @@
         }
         // Clear in-memory pixel-sampling cache
         Object.keys(tileCache).forEach(k => delete tileCache[k]);
-        const ts = Date.now();
-        ['temperature', 'wind', 'precipitation'].forEach(src => {
-          if (map.getSource(src)) {
-            map.getSource(src).setTiles([
-              `${TILE_BASE}/${src}/{z}/{x}/{y}.png?_=${ts}`
-            ]);
-          }
-        });
-        setTimeout(updateTempLabels, 1000);
+        setTimeout(updateAllLabels, 1000);
         document.getElementById('freshnessText').textContent =
           `HRRR ${meta.hrrr_hour}Z · MRMS live`;
       }
@@ -1577,32 +1610,9 @@
 
   // ─── Layer Toggle ───────────────────────────
   function updateLayerVisibility() {
+    // Radar + satellite: raster visibility
     if (map.getLayer('radar-layer')) {
       map.setLayoutProperty('radar-layer', 'visibility', layers.radar ? 'visible' : 'none');
-    }
-    if (map.getLayer('temperature-layer')) {
-      map.setLayoutProperty('temperature-layer', 'visibility', layers.temp ? 'visible' : 'none');
-      if (layers.temp) {
-        const tempOpacity = layers.radar ? 0.3 : 0.6;
-        map.setPaintProperty('temperature-layer', 'raster-opacity', tempOpacity);
-      }
-    }
-    if (map.getLayer('temp-labels-layer')) {
-      map.setLayoutProperty('temp-labels-layer', 'visibility', layers.temp ? 'visible' : 'none');
-    }
-    if (map.getLayer('wind-layer')) {
-      map.setLayoutProperty('wind-layer', 'visibility', layers.wind ? 'visible' : 'none');
-      if (layers.wind) {
-        const windOpacity = layers.radar ? 0.5 : 0.7;
-        map.setPaintProperty('wind-layer', 'raster-opacity', windOpacity);
-      }
-    }
-    if (map.getLayer('precipitation-layer')) {
-      map.setLayoutProperty('precipitation-layer', 'visibility', layers.precip ? 'visible' : 'none');
-      if (layers.precip) {
-        const precipOpacity = layers.radar ? 0.5 : 0.7;
-        map.setPaintProperty('precipitation-layer', 'raster-opacity', precipOpacity);
-      }
     }
     if (map.getLayer('satellite-layer')) {
       map.setLayoutProperty('satellite-layer', 'visibility', layers.satellite ? 'visible' : 'none');
@@ -1612,7 +1622,23 @@
       map.setLayoutProperty('alerts-line', 'visibility', layers.alerts ? 'visible' : 'none');
     }
 
-    // Legend priority: radar > precip > wind > temp
+    // HRRR layers: label visibility (no raster overlays)
+    if (map.getLayer('temp-labels-layer')) {
+      map.setLayoutProperty('temp-labels-layer', 'visibility', layers.temp ? 'visible' : 'none');
+    }
+    if (map.getLayer('wind-labels-layer')) {
+      map.setLayoutProperty('wind-labels-layer', 'visibility', layers.wind ? 'visible' : 'none');
+    }
+    if (map.getLayer('precip-labels-layer')) {
+      map.setLayoutProperty('precip-labels-layer', 'visibility', layers.precip ? 'visible' : 'none');
+    }
+
+    // Refresh labels when toggled on
+    if (layers.temp) updateTempLabels();
+    if (layers.wind) updateWindLabels();
+    if (layers.precip) updatePrecipLabels();
+
+    // Legend: only show for radar
     const legend = document.getElementById('legend');
     const grad = document.getElementById('legendGradient');
     const lMin = document.getElementById('legendMin');
@@ -1623,21 +1649,6 @@
       grad.className = 'legend-gradient radar';
       lMin.textContent = 'Light';
       lMax.textContent = 'Heavy';
-    } else if (layers.precip) {
-      legend.classList.add('visible');
-      grad.className = 'legend-gradient precip';
-      lMin.textContent = '0 mm';
-      lMax.textContent = '50 mm';
-    } else if (layers.wind) {
-      legend.classList.add('visible');
-      grad.className = 'legend-gradient wind';
-      lMin.textContent = '0 mph';
-      lMax.textContent = '90 mph';
-    } else if (layers.temp) {
-      legend.classList.add('visible');
-      grad.className = 'legend-gradient temp';
-      lMin.textContent = '-40°F';
-      lMax.textContent = '120°F';
     } else {
       legend.classList.remove('visible');
     }
