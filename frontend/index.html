@@ -1985,13 +1985,14 @@
     const bounds = map.getBounds();
     const west = bounds.getWest(), east = bounds.getEast();
     const north = bounds.getNorth(), south = bounds.getSouth();
-    const lngStep = (east - west) / 6;
-    const latStep = (north - south) / 5;
+    const cols = 5, rows = 4;
+    const lngStep = (east - west) / cols;
+    const latStep = (north - south) / rows;
 
     const features = [];
     const promises = [];
-    for (let row = 0.5; row < 5; row++) {
-      for (let col = 0.5; col < 6; col++) {
+    for (let row = 0.3; row < rows; row++) {
+      for (let col = 0.3; col < cols; col++) {
         const lng = west + col * lngStep;
         const lat = south + row * latStep;
         promises.push(sampleTileAt(lng, lat, 'temperature').then(tempF => {
@@ -2019,13 +2020,14 @@
     const bounds = map.getBounds();
     const west = bounds.getWest(), east = bounds.getEast();
     const north = bounds.getNorth(), south = bounds.getSouth();
-    const lngStep = (east - west) / 6;
-    const latStep = (north - south) / 5;
+    const cols = 4, rows = 3;
+    const lngStep = (east - west) / cols;
+    const latStep = (north - south) / rows;
 
     const features = [];
     const promises = [];
-    for (let row = 0.5; row < 5; row++) {
-      for (let col = 0.5; col < 6; col++) {
+    for (let row = 0.7; row < rows; row++) {
+      for (let col = 0.7; col < cols; col++) {
         const lng = west + col * lngStep;
         const lat = south + row * latStep;
         promises.push(
@@ -2058,13 +2060,14 @@
     const bounds = map.getBounds();
     const west = bounds.getWest(), east = bounds.getEast();
     const north = bounds.getNorth(), south = bounds.getSouth();
-    const lngStep = (east - west) / 6;
-    const latStep = (north - south) / 5;
+    const cols = 8, rows = 6;
+    const lngStep = (east - west) / cols;
+    const latStep = (north - south) / rows;
 
     const features = [];
     const promises = [];
-    for (let row = 0.5; row < 5; row++) {
-      for (let col = 0.5; col < 6; col++) {
+    for (let row = 0.5; row < rows; row++) {
+      for (let col = 0.5; col < cols; col++) {
         const lng = west + col * lngStep;
         const lat = south + row * latStep;
         promises.push(
