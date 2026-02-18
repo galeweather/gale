@@ -19,13 +19,17 @@ from urllib.error import URLError
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_DIR = os.path.join(SCRIPT_DIR, "output", "wind")
+WDIR_OUTPUT_DIR = os.path.join(SCRIPT_DIR, "output", "wind-direction")
 RAMP_FILE = os.path.join(SCRIPT_DIR, "wind_ramp.txt")
+WDIR_RAMP_FILE = os.path.join(SCRIPT_DIR, "wind_direction_ramp.txt")
 UGRD_GRIB = os.path.join(SCRIPT_DIR, "hrrr_ugrd.grib2")
 VGRD_GRIB = os.path.join(SCRIPT_DIR, "hrrr_vgrd.grib2")
 UGRD_TIF = os.path.join(SCRIPT_DIR, "hrrr_ugrd.tif")
 VGRD_TIF = os.path.join(SCRIPT_DIR, "hrrr_vgrd.tif")
 WSPD_TIF = os.path.join(SCRIPT_DIR, "hrrr_wspd.tif")
 RGBA_FILE = os.path.join(SCRIPT_DIR, "hrrr_wspd_rgba.tif")
+WDIR_TIF = os.path.join(SCRIPT_DIR, "hrrr_wdir.tif")
+WDIR_RGBA = os.path.join(SCRIPT_DIR, "hrrr_wdir_rgba.tif")
 
 NOMADS_BASE = "https://nomads.ncep.noaa.gov/cgi-bin/filter_hrrr_2d.pl"
 
@@ -154,9 +158,9 @@ def main():
     ], "Rendering tiles (zoom 2-6)")
 
     tile_count = count_tiles(OUTPUT_DIR)
-    print(f"Generated {tile_count} tiles in {OUTPUT_DIR}")
+    print(f"Generated {tile_count} wind speed tiles in {OUTPUT_DIR}")
 
-    # Write metadata
+    # Write speed metadata
     metadata = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "hrrr_run": f"{date_str} {hour_str}Z",
@@ -171,8 +175,63 @@ def main():
         json.dump(metadata, f, indent=2)
     print(f"Wrote {meta_path}")
 
+    # ── Wind Direction Tiles ──────────────────────────
+    # Compute meteorological wind direction (where wind is coming FROM):
+    # atan2(-u, -v) converted to degrees, mod 360
+    # Using numpy via gdal_calc: 90 - atan2(v, u) gives "math" bearing,
+    # but standard met convention is atan2(-u, -v) * 180/pi % 360
+    run_cmd([
+        "gdal_calc.py",
+        "-A", UGRD_TIF,
+        "-B", VGRD_TIF,
+        "--calc=(arctan2(-A, -B) * 57.29577951 + 360) % 360",
+        "--outfile", WDIR_TIF,
+        "--type=Float32",
+        "--overwrite"
+    ], "Computing wind direction from UGRD + VGRD")
+
+    # Color relief → grayscale RGBA (direction encoded as pixel value)
+    run_cmd([
+        "gdaldem", "color-relief",
+        WDIR_TIF, WDIR_RAMP_FILE, WDIR_RGBA,
+        "-alpha", "-of", "GTiff"
+    ], "Wind direction color relief → RGBA")
+
+    # Generate direction tiles (NEAREST resampling — no interpolation across 0/360 boundary)
+    if os.path.exists(WDIR_OUTPUT_DIR):
+        shutil.rmtree(WDIR_OUTPUT_DIR)
+    os.makedirs(WDIR_OUTPUT_DIR, exist_ok=True)
+
+    run_cmd([
+        "gdal2tiles.py",
+        "--zoom=2-6",
+        "--processes=4",
+        "--resampling=nearest",
+        "--xyz",
+        "--exclude",
+        WDIR_RGBA, WDIR_OUTPUT_DIR
+    ], "Rendering wind direction tiles (zoom 2-6)")
+
+    wdir_tile_count = count_tiles(WDIR_OUTPUT_DIR)
+    print(f"Generated {wdir_tile_count} wind direction tiles in {WDIR_OUTPUT_DIR}")
+
+    # Write direction metadata
+    wdir_metadata = {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "hrrr_run": f"{date_str} {hour_str}Z",
+        "hrrr_date": date_str,
+        "hrrr_hour": hour_str,
+        "zoom_range": "2-6",
+        "tile_count": wdir_tile_count,
+        "variable": "WDIR:10m above ground (direction from UGRD+VGRD)"
+    }
+    wdir_meta_path = os.path.join(WDIR_OUTPUT_DIR, "metadata.json")
+    with open(wdir_meta_path, "w") as f:
+        json.dump(wdir_metadata, f, indent=2)
+    print(f"Wrote {wdir_meta_path}")
+
     # Cleanup intermediate files
-    for f in [UGRD_GRIB, VGRD_GRIB, UGRD_TIF, VGRD_TIF, WSPD_TIF, RGBA_FILE]:
+    for f in [UGRD_GRIB, VGRD_GRIB, UGRD_TIF, VGRD_TIF, WSPD_TIF, RGBA_FILE, WDIR_TIF, WDIR_RGBA]:
         if os.path.exists(f):
             os.remove(f)
 

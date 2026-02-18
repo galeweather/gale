@@ -1111,6 +1111,29 @@
       }
     });
 
+    // Wind direction arrows — rotated arrow above speed label
+    map.addLayer({
+      id: 'wind-arrows-layer',
+      type: 'symbol',
+      source: 'wind-labels',
+      layout: {
+        'text-field': '\u2193',
+        'text-size': 18,
+        'text-font': ['Noto Sans Bold'],
+        'text-rotation-alignment': 'map',
+        'text-rotate': ['get', 'direction'],
+        'text-allow-overlap': false,
+        'text-ignore-placement': false,
+        'text-offset': [0, -1.3],
+        'text-padding': 4
+      },
+      paint: {
+        'text-color': '#38bdf8',
+        'text-halo-color': 'rgba(0, 0, 0, 0.8)',
+        'text-halo-width': 1.5
+      }
+    });
+
     // Precipitation labels — shows precip amounts at grid points
     map.addSource('precip-labels', {
       type: 'geojson',
@@ -1130,7 +1153,7 @@
         'text-padding': 8
       },
       paint: {
-        'text-color': '#4ade80',
+        'text-color': ['match', ['get', 'type'], 'snow', '#ffffff', '#60a5fa'],
         'text-halo-color': 'rgba(0, 0, 0, 0.8)',
         'text-halo-width': 1.5
       }
@@ -1360,6 +1383,10 @@
     return +(mm * 0.03937).toFixed(2);
   }
 
+  function rgbToWindDir(r, g, b) {
+    return r * 360 / 255;
+  }
+
   // Tile pixel reading via offscreen canvas
   const tileCache = {};
   const offCanvas = document.createElement('canvas');
@@ -1385,6 +1412,7 @@
     const layerPath = layerName || 'temperature';
     const converter = layerPath === 'wind' ? rgbToWindMph
                     : layerPath === 'precipitation' ? rgbToPrecipIn
+                    : layerPath === 'wind-direction' ? rgbToWindDir
                     : rgbToTempF;
 
     return new Promise((resolve) => {
@@ -1463,15 +1491,20 @@
       for (let col = 0.5; col < 6; col++) {
         const lng = west + col * lngStep;
         const lat = south + row * latStep;
-        promises.push(sampleTileAt(lng, lat, 'wind').then(mph => {
-          if (mph !== null && mph > 1) {
-            features.push({
-              type: 'Feature',
-              geometry: { type: 'Point', coordinates: [lng, lat] },
-              properties: { label: `${mph} mph` }
-            });
-          }
-        }));
+        promises.push(
+          Promise.all([
+            sampleTileAt(lng, lat, 'wind'),
+            sampleTileAt(lng, lat, 'wind-direction')
+          ]).then(([mph, dir]) => {
+            if (mph !== null && mph > 1) {
+              features.push({
+                type: 'Feature',
+                geometry: { type: 'Point', coordinates: [lng, lat] },
+                properties: { label: `${mph} mph`, direction: dir ?? 0 }
+              });
+            }
+          })
+        );
       }
     }
     await Promise.all(promises);
@@ -1494,16 +1527,23 @@
       for (let col = 0.5; col < 6; col++) {
         const lng = west + col * lngStep;
         const lat = south + row * latStep;
-        promises.push(sampleTileAt(lng, lat, 'precipitation').then(inches => {
-          if (inches !== null && inches > 0) {
-            const label = inches < 0.01 ? 'Trace' : `${inches} in`;
-            features.push({
-              type: 'Feature',
-              geometry: { type: 'Point', coordinates: [lng, lat] },
-              properties: { label }
-            });
-          }
-        }));
+        promises.push(
+          Promise.all([
+            sampleTileAt(lng, lat, 'precipitation'),
+            sampleTileAt(lng, lat, 'temperature')
+          ]).then(([inches, tempF]) => {
+            if (inches !== null && inches > 0) {
+              const type = (tempF !== null && tempF <= 32) ? 'snow' : 'rain';
+              const prefix = type === 'snow' ? '\u2744 ' : '';
+              const label = inches < 0.01 ? `${prefix}Trace` : `${prefix}${inches} in`;
+              features.push({
+                type: 'Feature',
+                geometry: { type: 'Point', coordinates: [lng, lat] },
+                properties: { label, type }
+              });
+            }
+          })
+        );
       }
     }
     await Promise.all(promises);
@@ -1627,6 +1667,9 @@
     }
     if (map.getLayer('wind-labels-layer')) {
       map.setLayoutProperty('wind-labels-layer', 'visibility', layers.wind ? 'visible' : 'none');
+    }
+    if (map.getLayer('wind-arrows-layer')) {
+      map.setLayoutProperty('wind-arrows-layer', 'visibility', layers.wind ? 'visible' : 'none');
     }
     if (map.getLayer('precip-labels-layer')) {
       map.setLayoutProperty('precip-labels-layer', 'visibility', layers.precip ? 'visible' : 'none');
