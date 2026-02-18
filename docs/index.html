@@ -850,9 +850,9 @@
         'carto-dark': {
           type: 'raster',
           tiles: [
-            'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
-            'https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
-            'https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png'
+            'https://a.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}@2x.png',
+            'https://b.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}@2x.png',
+            'https://c.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}@2x.png'
           ],
           tileSize: 256,
           attribution: '&copy; <a href="https://carto.com">CARTO</a> &copy; <a href="https://osm.org">OSM</a>'
@@ -1087,6 +1087,129 @@
         'text-color': '#ffffff',
         'text-halo-color': 'rgba(0, 0, 0, 0.7)',
         'text-halo-width': 1.5
+      }
+    });
+
+    // ── Vector Place Labels (OpenFreeMap, renders above all weather) ──
+    map.addSource('labels', {
+      type: 'vector',
+      tiles: ['https://tiles.openfreemap.org/data/v3/{z}/{x}/{y}.pbf'],
+      maxzoom: 14
+    });
+
+    // Shared paint for frosted dark halo
+    const labelHalo = {
+      'text-halo-color': 'rgba(10, 14, 23, 0.85)',
+      'text-halo-width': 2,
+      'text-halo-blur': 1.5
+    };
+
+    // Tier 1: State names (zoom 3–7, uppercase, muted)
+    map.addLayer({
+      id: 'place-state',
+      type: 'symbol',
+      source: 'labels',
+      'source-layer': 'place',
+      filter: ['==', 'class', 'state'],
+      minzoom: 3,
+      maxzoom: 7,
+      layout: {
+        'text-field': ['get', 'name'],
+        'text-font': ['Open Sans Semibold'],
+        'text-size': 11,
+        'text-transform': 'uppercase',
+        'text-letter-spacing': 0.1,
+        'text-allow-overlap': false,
+        'text-padding': 4
+      },
+      paint: {
+        'text-color': '#94a3b8',
+        ...labelHalo,
+        'text-opacity': [
+          'interpolate', ['linear'], ['zoom'],
+          3, 0, 4, 1, 6, 1, 7, 0
+        ]
+      }
+    });
+
+    // Tier 2: Major cities — rank ≤ 3 (zoom 4+)
+    map.addLayer({
+      id: 'place-city-major',
+      type: 'symbol',
+      source: 'labels',
+      'source-layer': 'place',
+      filter: ['all', ['==', 'class', 'city'], ['<=', 'rank', 3]],
+      minzoom: 4,
+      layout: {
+        'text-field': ['get', 'name'],
+        'text-font': ['Open Sans Semibold'],
+        'text-size': [
+          'interpolate', ['linear'], ['zoom'],
+          4, 14, 10, 18
+        ],
+        'text-allow-overlap': false,
+        'text-padding': 4
+      },
+      paint: {
+        'text-color': '#e2e8f0',
+        ...labelHalo,
+        'text-opacity': [
+          'interpolate', ['linear'], ['zoom'],
+          4, 0, 5, 1
+        ]
+      }
+    });
+
+    // Tier 3: Other cities — rank > 3 (zoom 6+)
+    map.addLayer({
+      id: 'place-city',
+      type: 'symbol',
+      source: 'labels',
+      'source-layer': 'place',
+      filter: ['all', ['==', 'class', 'city'], ['>', 'rank', 3]],
+      minzoom: 6,
+      layout: {
+        'text-field': ['get', 'name'],
+        'text-font': ['Open Sans Semibold'],
+        'text-size': [
+          'interpolate', ['linear'], ['zoom'],
+          6, 12, 10, 15
+        ],
+        'text-allow-overlap': false,
+        'text-padding': 4
+      },
+      paint: {
+        'text-color': '#e2e8f0',
+        ...labelHalo,
+        'text-opacity': [
+          'interpolate', ['linear'], ['zoom'],
+          6, 0, 7, 1
+        ]
+      }
+    });
+
+    // Tier 4: Towns (zoom 9+)
+    map.addLayer({
+      id: 'place-town',
+      type: 'symbol',
+      source: 'labels',
+      'source-layer': 'place',
+      filter: ['==', 'class', 'town'],
+      minzoom: 9,
+      layout: {
+        'text-field': ['get', 'name'],
+        'text-font': ['Open Sans Semibold'],
+        'text-size': 11,
+        'text-allow-overlap': false,
+        'text-padding': 4
+      },
+      paint: {
+        'text-color': '#cbd5e1',
+        ...labelHalo,
+        'text-opacity': [
+          'interpolate', ['linear'], ['zoom'],
+          9, 0, 10, 1
+        ]
       }
     });
 
