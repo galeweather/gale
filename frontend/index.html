@@ -845,7 +845,7 @@
     style: {
       version: 8,
       name: 'Gale Dark',
-      glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
+      glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
       sources: {
         'carto-dark': {
           type: 'raster',
@@ -1078,7 +1078,7 @@
       layout: {
         'text-field': ['get', 'label'],
         'text-size': 13,
-        'text-font': ['Open Sans Semibold'],
+        'text-font': ['Noto Sans Bold'],
         'text-allow-overlap': false,
         'text-ignore-placement': false,
         'text-padding': 8
@@ -1093,8 +1093,7 @@
     // ── Vector Place Labels (OpenFreeMap, renders above all weather) ──
     map.addSource('labels', {
       type: 'vector',
-      tiles: ['https://tiles.openfreemap.org/data/v3/{z}/{x}/{y}.pbf'],
-      maxzoom: 14
+      url: 'https://tiles.openfreemap.org/planet'
     });
 
     // Shared paint for frosted dark halo
@@ -1115,7 +1114,7 @@
       maxzoom: 7,
       layout: {
         'text-field': ['get', 'name'],
-        'text-font': ['Open Sans Semibold'],
+        'text-font': ['Noto Sans Italic'],
         'text-size': 11,
         'text-transform': 'uppercase',
         'text-letter-spacing': 0.1,
@@ -1142,7 +1141,7 @@
       minzoom: 4,
       layout: {
         'text-field': ['get', 'name'],
-        'text-font': ['Open Sans Semibold'],
+        'text-font': ['Noto Sans Bold'],
         'text-size': [
           'interpolate', ['linear'], ['zoom'],
           4, 14, 10, 18
@@ -1170,7 +1169,7 @@
       minzoom: 6,
       layout: {
         'text-field': ['get', 'name'],
-        'text-font': ['Open Sans Semibold'],
+        'text-font': ['Noto Sans Bold'],
         'text-size': [
           'interpolate', ['linear'], ['zoom'],
           6, 12, 10, 15
@@ -1198,7 +1197,7 @@
       minzoom: 9,
       layout: {
         'text-field': ['get', 'name'],
-        'text-font': ['Open Sans Semibold'],
+        'text-font': ['Noto Sans Regular'],
         'text-size': 11,
         'text-allow-overlap': false,
         'text-padding': 4
