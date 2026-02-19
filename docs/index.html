@@ -539,7 +539,7 @@
 
   .timeline-now-marker {
     position: absolute;
-    left: 14.3%;
+    left: 0;
     top: 50%;
     transform: translate(-50%, -50%);
     width: 2px;
@@ -1494,7 +1494,7 @@
       <div class="timeline-track-row">
         <div class="timeline-now-marker"></div>
         <input class="timeline-slider-unified" type="range" min="0" max="118" value="10" id="timeSlider" aria-label="Timeline" aria-valuetext="Now">
-        <div class="timeline-label" id="timeLabel">Now</div>
+        <div class="timeline-label" id="timeLabel" style="display:none"></div>
       </div>
       <div class="timeline-ticks" id="timelineTicks"></div>
     </div>
@@ -3504,7 +3504,10 @@
   }
 
   function applyForecastInterpolation() {
-    const baseOpacity = layers.radar ? 0.25 : 0.7;
+    // In forecast mode, boost temp visibility so forecast changes are visible
+    // (radar dimmed = less competition, so temp can be stronger)
+    const inForecast = forecastHourFrac > 0;
+    const baseOpacity = inForecast ? 0.6 : (layers.radar ? 0.25 : 0.7);
     const lowerOpacity = baseOpacity * (1 - fcBlend);
     const upperOpacity = baseOpacity * fcBlend;
     if (map.getLayer(currentTempLayerId)) {
@@ -4394,13 +4397,21 @@
       updateRadarFrame(0); // live radar as context
       applyForecastInterpolation();
       updateTempLabels();
+      updateWindLabels();
 
-      // Fade radar down, bring precip forecast up
+      // Fade radar out in forecast (it's stale past data), bring precip forecast up
       const fadeT = Math.min(forecastHourFrac, 1);
-      if (map.getLayer('radar-layer')) map.setPaintProperty('radar-layer', 'raster-opacity', 0.7 * (1 - fadeT * 0.5));
+      if (map.getLayer('radar-layer')) map.setPaintProperty('radar-layer', 'raster-opacity', 0.7 * (1 - fadeT * 0.85));
       if (map.getLayer('precip-forecast-layer')) map.setPaintProperty('precip-forecast-layer', 'raster-opacity', 0.7 * fadeT);
     }
-    timeLabel.textContent = getTimelineLabel(val);
+    // Hide floating label at Now (tick already shows "NOW")
+    if (val === 10) {
+      timeLabel.textContent = '';
+      timeLabel.style.display = 'none';
+    } else {
+      timeLabel.style.display = '';
+      timeLabel.textContent = getTimelineLabel(val);
+    }
     const offsetMin = val <= 10 ? (10 - val) * 5 : (val - 10) * 10;
     timeSlider.setAttribute('aria-valuetext', val === 10 ? 'Now' : val < 10 ? `${offsetMin} minutes ago` : `+${offsetMin} minutes`);
     positionTimeLabel();
@@ -4410,9 +4421,18 @@
     }
   });
 
+  // Position now-marker to align with slider value 10 (Now)
+  function positionNowMarker() {
+    const marker = document.querySelector('.timeline-now-marker');
+    if (!marker || !timeSlider.offsetWidth) return;
+    const pct = 10 / (parseInt(timeSlider.max) - parseInt(timeSlider.min));
+    const offset = 8 + pct * (timeSlider.offsetWidth - 16);
+    marker.style.left = offset + 'px';
+  }
+
   // Position label on load
-  setTimeout(positionTimeLabel, 100);
-  window.addEventListener('resize', positionTimeLabel);
+  setTimeout(() => { positionTimeLabel(); positionNowMarker(); }, 100);
+  window.addEventListener('resize', () => { positionTimeLabel(); positionNowMarker(); });
 
   // Dynamic timeline ticks with real times
   function formatTime(date) {
