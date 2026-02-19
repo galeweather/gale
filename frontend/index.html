@@ -1326,7 +1326,7 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
       <path d="M3 17h18"/><path d="M5 13h14"/><circle cx="12" cy="8" r="4"/><path d="M8.5 6.5a5 5 0 010 3"/><path d="M15.5 6.5a5 5 0 000 3"/>
     </svg>
-    <span>Elev</span>
+    <span>Elevation</span>
   </button>
 
   <!-- Atmos & X-Sect hidden until atmosphere profile pipeline is fixed -->
@@ -1617,7 +1617,7 @@
     zoom: 6,
     maxZoom: 12,
     minZoom: 2,
-    pitch: 30,
+    pitch: 45,
     maxPitch: 80,
     attributionControl: true
   });
@@ -3503,8 +3503,8 @@
   // ─── View Mode (3-state: Top / Tilt / 3D) ──────
   const VIEW_MODES = [
     { name: 'Top', pitch: 0, terrain: false },
-    { name: 'Tilt', pitch: 30, terrain: true },
-    { name: '3D', pitch: 60, terrain: true }
+    { name: 'Tilt', pitch: 45, terrain: true },
+    { name: '3D', pitch: 70, terrain: true }
   ];
   let viewMode = 1; // default: Tilt
   const viewToggle = document.getElementById('viewToggle');
@@ -3512,7 +3512,9 @@
   function setViewMode(mode) {
     viewMode = mode;
     const v = VIEW_MODES[viewMode];
-    map.easeTo({ pitch: v.pitch, duration: 600 });
+    const opts = { pitch: v.pitch, duration: 600 };
+    if (mode === 0) opts.bearing = 0; // reset north for top-down
+    map.easeTo(opts);
     map.setTerrain(v.terrain ? { source: 'dem', exaggeration: 1.5 } : null);
     viewToggle.classList.toggle('active', viewMode > 0);
     viewToggle.querySelector('span').textContent = v.name;
