@@ -1900,6 +1900,25 @@
       }
     });
 
+    // HRRR Precipitation forecast overlay (futurecast radar)
+    map.addSource('precip-forecast', {
+      type: 'raster',
+      tiles: [`${TILE_BASE}/precipitation/{z}/{x}/{y}.png`],
+      tileSize: 256,
+      maxzoom: 6
+    });
+
+    map.addLayer({
+      id: 'precip-forecast-layer',
+      type: 'raster',
+      source: 'precip-forecast',
+      paint: {
+        'raster-opacity': 0,
+        'raster-fade-duration': 0
+      },
+      layout: { visibility: 'visible' }
+    });
+
     // Satellite — GOES visible via Iowa State Mesonet
     map.addSource('satellite', {
       type: 'raster',
@@ -3187,12 +3206,19 @@
       updateRadarFrame(sliderToRadarIdx(val));
       forecastT = 0;
       applyForecastInterpolation();
+      // Restore radar, hide forecast precip
+      if (map.getLayer('radar-layer')) map.setPaintProperty('radar-layer', 'raster-opacity', 0.7);
+      if (map.getLayer('precip-forecast-layer')) map.setPaintProperty('precip-forecast-layer', 'raster-opacity', 0);
     } else {
       // Future forecast: slider 11-70 → forecastT 1/60 to 1.0
-      updateRadarFrame(0); // show live radar
+      updateRadarFrame(0);
       forecastT = (val - 10) / 60;
       applyForecastInterpolation();
       updateTempLabels();
+      // Crossfade: radar out, HRRR precip in over first 10 minutes of future
+      const fadeT = Math.min((val - 10) / 10, 1); // 0→1 over slider 11-20
+      if (map.getLayer('radar-layer')) map.setPaintProperty('radar-layer', 'raster-opacity', 0.7 * (1 - fadeT));
+      if (map.getLayer('precip-forecast-layer')) map.setPaintProperty('precip-forecast-layer', 'raster-opacity', 0.7 * fadeT);
     }
     timeLabel.textContent = getTimelineLabel(val);
     timeSlider.setAttribute('aria-valuetext', val === 10 ? 'Now' : val < 10 ? `${(10 - val) * 5} minutes ago` : `+${val - 10} minutes`);
@@ -3220,6 +3246,9 @@
       // Reset to past, clear any future interpolation
       forecastT = 0;
       applyForecastInterpolation();
+      // Restore radar, hide forecast precip
+      if (map.getLayer('radar-layer')) map.setPaintProperty('radar-layer', 'raster-opacity', 0.7);
+      if (map.getLayer('precip-forecast-layer')) map.setPaintProperty('precip-forecast-layer', 'raster-opacity', 0);
       // Start from oldest (left), play right toward now
       let frame = 0;
       timeSlider.value = frame;
