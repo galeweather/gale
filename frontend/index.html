@@ -409,6 +409,46 @@
     color: var(--accent);
   }
 
+  .joystick-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 6px 8px 2px;
+    gap: 4px;
+  }
+  .joystick-ring {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    border: 1px solid var(--border-subtle);
+    background: rgba(255, 255, 255, 0.03);
+    position: relative;
+    cursor: grab;
+    touch-action: none;
+    transition: border-color 0.15s;
+  }
+  .joystick-ring:hover { border-color: var(--accent-dim); }
+  .joystick-ring.active { border-color: var(--accent); cursor: grabbing; }
+  .joystick-handle {
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    transition: background 0.15s;
+    pointer-events: none;
+  }
+  .joystick-ring.active .joystick-handle { background: var(--accent); }
+  .joystick-label {
+    font-size: 9px;
+    color: var(--text-muted);
+    letter-spacing: 0.03em;
+    font-family: var(--sans);
+  }
+
   .layer-divider {
     height: 1px;
     background: var(--border-subtle);
@@ -1129,6 +1169,7 @@
     .layer-btn { min-width: auto; padding: 8px 10px; }
     .layer-btn svg { display: none; }
     .layer-divider { display: none; }
+    .joystick-wrap { display: none; }
     .forecast-drawer { left: 10px; right: 10px; }
     .forecast-drawer.open { bottom: 60px; }
     .timeline-bar { padding: 30px 10px 10px; }
@@ -1369,6 +1410,13 @@
     <button data-view="0" title="Top-down 2D view">2D</button>
     <button data-view="1" class="active" title="Tilted view with terrain">Tilt</button>
     <button data-view="2" title="Full 3D terrain view">3D</button>
+  </div>
+
+  <div class="joystick-wrap" id="joystickWrap">
+    <div class="joystick-ring" id="joystickRing">
+      <div class="joystick-handle" id="joystickHandle"></div>
+    </div>
+    <div class="joystick-label">Drag to orbit</div>
   </div>
 
   <!-- Atmos & X-Sect hidden until atmosphere profile pipeline is fixed -->
@@ -3759,6 +3807,59 @@
   viewBtns.forEach(btn => {
     btn.addEventListener('click', () => setViewMode(parseInt(btn.dataset.view)));
   });
+
+  // ─── Orbit Joystick ─────────────────────────────
+  (function initJoystick() {
+    const ring = document.getElementById('joystickRing');
+    const handle = document.getElementById('joystickHandle');
+    if (!ring || !handle) return;
+    const RADIUS = 19; // max displacement from center (ring is 56px, handle 18px)
+    let dragging = false;
+
+    function onStart(e) {
+      e.preventDefault();
+      dragging = true;
+      ring.classList.add('active');
+      onMove(e);
+    }
+
+    function onMove(e) {
+      if (!dragging) return;
+      const rect = ring.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const pt = e.touches ? e.touches[0] : e;
+      let dx = pt.clientX - cx;
+      let dy = pt.clientY - cy;
+      // Clamp to ring radius
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist > RADIUS) { dx = dx / dist * RADIUS; dy = dy / dist * RADIUS; }
+      handle.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+      // Map joystick position to bearing/pitch changes
+      // dx → bearing rotation, dy → pitch adjustment
+      const nx = dx / RADIUS; // -1 to 1
+      const ny = dy / RADIUS; // -1 to 1
+      const currentPitch = map.getPitch();
+      const currentBearing = map.getBearing();
+      const newBearing = currentBearing + nx * 3; // 3°/frame at full deflection
+      const newPitch = Math.max(0, Math.min(80, currentPitch - ny * 2)); // inverted: up = more pitch
+      map.jumpTo({ bearing: newBearing, pitch: newPitch });
+    }
+
+    function onEnd() {
+      if (!dragging) return;
+      dragging = false;
+      ring.classList.remove('active');
+      handle.style.transform = 'translate(-50%, -50%)';
+    }
+
+    ring.addEventListener('mousedown', onStart);
+    ring.addEventListener('touchstart', onStart, { passive: false });
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('touchmove', onMove, { passive: false });
+    window.addEventListener('mouseup', onEnd);
+    window.addEventListener('touchend', onEnd);
+  })();
 
   // Elevated radar button
   const elevRadarToggle = document.getElementById('elevRadarToggle');
