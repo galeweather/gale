@@ -3554,7 +3554,7 @@
       updateElevatedRadar();
     } else {
       if (map.getLayer('radar-3d-layer')) map.setLayoutProperty('radar-3d-layer', 'visibility', 'none');
-      if (map.getLayer('precip-shafts-layer')) map.setLayoutProperty('precip-shafts-layer', 'visibility', 'none');
+      if (map.getLayer('cloud-halo-layer')) map.setLayoutProperty('cloud-halo-layer', 'visibility', 'none');
     }
     announce(`Elevated radar ${elevatedRadarOn ? 'on' : 'off'}`);
   }
@@ -3623,12 +3623,15 @@
       const sc = document.createElement('canvas');
       sc.width = 256; sc.height = 256;
       const sx = sc.getContext('2d');
-      const deckFeatures = [];   // cloud deck discs
-      const shaftFeatures = [];  // precipitation shafts below
+      const coreFeatures = [];  // bright inner cloud mass
+      const haloFeatures = [];  // faded outer edge (fake transparency)
       let lastKey = null;
 
-      // Circle template — 12 pts with per-vertex wobble for organic edges
-      const CPT = 12;
+      // Background color for blending halos toward (dark theme bg)
+      const BG_R = 10, BG_G = 14, BG_B = 23; // --bg-base: #0a0e17
+
+      // 24-vertex circle template for organic shapes
+      const CPT = 24;
       const angles = [];
       for (let i = 0; i <= CPT; i++) angles.push((i / CPT) * Math.PI * 2);
 
@@ -3657,84 +3660,98 @@
         const maxC = Math.max(R, G, B);
         const dbz = Math.min(65, 10 + redDom * 45 + (maxC / 255) * 20);
 
-        // Skip very faint returns for natural gaps
+        // Skip faint returns for natural gaps in cloud deck
         if (dbz < 12 && rnd1 < 0.15) continue;
 
-        // ── Cloud deck altitude (meters, visually exaggerated) ──
-        // Real cloud bases: stratus 600-2000m, nimbostratus 500-3000m, Cb 300-2000m
-        // Exaggerated 2-3x for MapLibre's compressed vertical scale
-        // Key: all clouds form a FLAT DECK — consistent base with slight variation
-        // Heavier precip = lower, darker deck (menacing)
+        // ── Cloud deck altitude ──
         let deckBase, deckThick;
         if (dbz < 20) {
-          deckBase = 4500 + rnd4 * 1500;  // high thin deck
+          deckBase = 4500 + rnd4 * 1500;
           deckThick = 400 + rnd1 * 300;
         } else if (dbz < 35) {
-          deckBase = 3500 + rnd4 * 1200;  // mid-level nimbostratus
+          deckBase = 3500 + rnd4 * 1200;
           deckThick = 500 + rnd1 * 400;
         } else if (dbz < 50) {
-          deckBase = 2500 + rnd4 * 800;   // low convective
+          deckBase = 2500 + rnd4 * 800;
           deckThick = 600 + rnd1 * 500;
         } else {
-          deckBase = 2000 + rnd4 * 500;   // very low, menacing
+          deckBase = 2000 + rnd4 * 500;
           deckThick = 800 + rnd1 * 600;
         }
         deckBase = Math.round(deckBase);
         const deckTop = Math.round(deckBase + deckThick);
 
-        // ── Cloud color: white→gray by intensity (darker = heavier) ──
+        // ── Cloud color by intensity ──
         const storm = Math.min(1, dbz / 55);
-        const L = Math.round(225 - storm * 100); // 225 (bright) → 125 (dark)
-        const deckColor = `rgb(${L}, ${L + 2}, ${L + 5})`;
+        const L = Math.round(225 - storm * 100);
 
-        // ── Disc geometry: slightly oversized so adjacent cells overlap ──
-        // Overlap creates continuous deck naturally — denser where more cells stack
-        const rLng = CELL_DEG * (0.55 + rnd1 * 0.15); // 55-70% of cell = overlap
-        const rLat = CELL_DEG * (0.55 + rnd1 * 0.15);
-        const cLng = cell.lng + (rnd2 - 0.5) * CELL_DEG * 0.3;
-        const cLat = cell.lat + (rnd3 - 0.5) * CELL_DEG * 0.3;
+        // Core color: standard cloud brightness
+        const coreColor = `rgb(${L}, ${L + 2}, ${L + 5})`;
 
-        const coords = angles.map((a, i) => {
-          const vh = ((h + i * 2654435761) >>> 0) & 0xFF;
-          const w = 1.0 + (vh / 255 - 0.5) * 0.2; // ±10% wobble
-          return [cLng + Math.cos(a) * rLng * w, cLat + Math.sin(a) * rLat * w];
-        });
+        // Halo color: blend 65% toward background for fake transparency
+        const haloBlend = 0.65;
+        const hR = Math.round(L * (1 - haloBlend) + BG_R * haloBlend);
+        const hG = Math.round((L + 2) * (1 - haloBlend) + BG_G * haloBlend);
+        const hB = Math.round((L + 5) * (1 - haloBlend) + BG_B * haloBlend);
+        const haloColor = `rgb(${hR}, ${hG}, ${hB})`;
 
-        deckFeatures.push({
-          type: 'Feature',
-          geometry: { type: 'Polygon', coordinates: [coords] },
-          properties: { color: deckColor, height: deckTop, base: deckBase }
-        });
+        // ── Geometry: position + jitter ──
+        const cLng = cell.lng + (rnd2 - 0.5) * CELL_DEG * 0.35;
+        const cLat = cell.lat + (rnd3 - 0.5) * CELL_DEG * 0.35;
 
-        // ── Precipitation shaft (virga) below cloud deck ──
-        // Only for moderate+ precip. Narrow column = visible rain/snow falling.
-        if (dbz >= 18) {
-          const shaftW = CELL_DEG * 0.06; // narrow shaft
-          const shaftL = CELL_DEG * 0.06;
-          const shaftBottom = 200 + rnd4 * 400; // doesn't quite reach ground
-          const shaftColor = dbz > 40
-            ? `rgb(${L + 10}, ${L + 12}, ${L + 20})` // slightly blue for heavy
-            : `rgb(${L + 20}, ${L + 22}, ${L + 28})`; // lighter for moderate
-          shaftFeatures.push({
-            type: 'Feature',
-            geometry: { type: 'Polygon', coordinates: [[
-              [cLng - shaftW, cLat - shaftL],
-              [cLng + shaftW, cLat - shaftL],
-              [cLng + shaftW, cLat + shaftL],
-              [cLng - shaftW, cLat + shaftL],
-              [cLng - shaftW, cLat - shaftL]
-            ]] },
-            properties: { color: shaftColor, height: deckBase, base: Math.round(shaftBottom) }
+        // Halo ring: large, heavily overlapping (70-90% of cell)
+        const haloRLng = CELL_DEG * (0.70 + rnd1 * 0.20);
+        const haloRLat = CELL_DEG * (0.70 + rnd1 * 0.20);
+
+        // Core disc: 55-65% of halo size
+        const coreFrac = 0.55 + rnd4 * 0.10;
+        const coreRLng = haloRLng * coreFrac;
+        const coreRLat = haloRLat * coreFrac;
+
+        // Generate wobbled circle coords
+        function makeCloud(rLng, rLat, wobbleAmt) {
+          return angles.map((a, i) => {
+            const vh = ((h + i * 2654435761) >>> 0) & 0xFF;
+            const w = 1.0 + (vh / 255 - 0.5) * wobbleAmt;
+            return [cLng + Math.cos(a) * rLng * w, cLat + Math.sin(a) * rLat * w];
           });
         }
+
+        // Halo: strong wobble (±30%) for ragged, natural cloud edges
+        const haloCoords = makeCloud(haloRLng, haloRLat, 0.6);
+        haloFeatures.push({
+          type: 'Feature',
+          geometry: { type: 'Polygon', coordinates: [haloCoords] },
+          properties: { color: haloColor, height: deckTop - 50, base: deckBase + 50 }
+        });
+
+        // Core: moderate wobble (±15%), slightly taller than halo
+        const coreCoords = makeCloud(coreRLng, coreRLat, 0.3);
+        coreFeatures.push({
+          type: 'Feature',
+          geometry: { type: 'Polygon', coordinates: [coreCoords] },
+          properties: { color: coreColor, height: deckTop, base: deckBase }
+        });
       }
 
-      // ── Render two layers: cloud deck + precipitation shafts ──
-      const deckGJ = { type: 'FeatureCollection', features: deckFeatures };
-      const shaftGJ = { type: 'FeatureCollection', features: shaftFeatures };
+      // ── Two layers: faded halo underneath, bright core on top ──
+      const haloGJ = { type: 'FeatureCollection', features: haloFeatures };
+      const coreGJ = { type: 'FeatureCollection', features: coreFeatures };
 
-      if (!map.getSource('radar-3d')) {
-        map.addSource('radar-3d', { type: 'geojson', data: deckGJ });
+      if (!map.getSource('cloud-halo')) {
+        map.addSource('cloud-halo', { type: 'geojson', data: haloGJ });
+        map.addLayer({
+          id: 'cloud-halo-layer',
+          type: 'fill-extrusion',
+          source: 'cloud-halo',
+          paint: {
+            'fill-extrusion-color': ['get', 'color'],
+            'fill-extrusion-height': ['get', 'height'],
+            'fill-extrusion-base': ['get', 'base'],
+            'fill-extrusion-opacity': 0.5
+          }
+        });
+        map.addSource('radar-3d', { type: 'geojson', data: coreGJ });
         map.addLayer({
           id: 'radar-3d-layer',
           type: 'fill-extrusion',
@@ -3743,26 +3760,14 @@
             'fill-extrusion-color': ['get', 'color'],
             'fill-extrusion-height': ['get', 'height'],
             'fill-extrusion-base': ['get', 'base'],
-            'fill-extrusion-opacity': 0.45
-          }
-        });
-        map.addSource('precip-shafts', { type: 'geojson', data: shaftGJ });
-        map.addLayer({
-          id: 'precip-shafts-layer',
-          type: 'fill-extrusion',
-          source: 'precip-shafts',
-          paint: {
-            'fill-extrusion-color': ['get', 'color'],
-            'fill-extrusion-height': ['get', 'height'],
-            'fill-extrusion-base': ['get', 'base'],
-            'fill-extrusion-opacity': 0.12
+            'fill-extrusion-opacity': 0.55
           }
         });
       } else {
-        map.getSource('radar-3d').setData(deckGJ);
+        map.getSource('cloud-halo').setData(haloGJ);
+        map.setLayoutProperty('cloud-halo-layer', 'visibility', 'visible');
+        map.getSource('radar-3d').setData(coreGJ);
         map.setLayoutProperty('radar-3d-layer', 'visibility', 'visible');
-        map.getSource('precip-shafts').setData(shaftGJ);
-        map.setLayoutProperty('precip-shafts-layer', 'visibility', 'visible');
       }
     });
   }
