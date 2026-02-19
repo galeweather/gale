@@ -79,3 +79,29 @@ def generate_multi_prefix_urls(prefixes: list[str]) -> dict[str, str]:
     for prefix in prefixes:
         all_urls.update(generate_presigned_urls(prefix))
     return all_urls
+
+
+def generate_single_file_urls(prefix: str, filenames: list[str]) -> dict[str, str]:
+    """Generate presigned PUT URLs for individual files (not tile grids).
+
+    Used for atmosphere profile.bin and similar single-file outputs.
+    """
+    client = get_s3_client()
+    urls = {}
+    for fname in filenames:
+        key = f"{prefix}/{fname}"
+        content_type = (
+            "application/octet-stream" if fname.endswith(".bin")
+            else "application/json" if fname.endswith(".json")
+            else "application/octet-stream"
+        )
+        urls[key] = client.generate_presigned_url(
+            "put_object",
+            Params={
+                "Bucket": settings.R2_BUCKET,
+                "Key": key,
+                "ContentType": content_type,
+            },
+            ExpiresIn=settings.PRESIGNED_URL_EXPIRY_SECONDS,
+        )
+    return urls

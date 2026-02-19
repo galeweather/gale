@@ -673,6 +673,139 @@
   }
 
   /* ═══════════════════════════════════════════
+     CROSS-SECTION PANEL
+     ═══════════════════════════════════════════ */
+  .xsection-panel {
+    position: fixed;
+    bottom: -420px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(90vw, 800px);
+    height: 360px;
+    z-index: 160;
+    background: var(--bg-panel);
+    backdrop-filter: blur(24px);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius) var(--radius) 0 0;
+    padding: 16px 20px;
+    transition: bottom 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: var(--shadow-lg);
+    display: flex;
+    flex-direction: column;
+  }
+  .xsection-panel.open { bottom: 70px; }
+  .xsection-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    flex-shrink: 0;
+  }
+  .xsection-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .xsection-subtitle {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-left: 10px;
+  }
+  .xsection-close {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 1px solid var(--border-subtle);
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    transition: all var(--transition);
+  }
+  .xsection-close:hover { border-color: var(--text-secondary); color: var(--text-primary); }
+  .xsection-canvas-wrap {
+    flex: 1;
+    position: relative;
+    min-height: 0;
+  }
+  .xsection-canvas-wrap canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+    border-radius: var(--radius-sm);
+  }
+  .xsection-hint {
+    position: fixed;
+    top: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 200;
+    background: var(--bg-panel);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--border-active);
+    border-radius: 20px;
+    padding: 8px 18px;
+    font-size: 12px;
+    color: var(--accent);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .xsection-hint.visible { opacity: 1; }
+
+  /* ═══════════════════════════════════════════
+     FORECAST DRAWER TABS (Sounding)
+     ═══════════════════════════════════════════ */
+  .forecast-tabs {
+    display: flex;
+    gap: 2px;
+    margin-bottom: 16px;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-sm);
+    padding: 2px;
+  }
+  .forecast-tab {
+    flex: 1;
+    padding: 6px 10px;
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-radius: 6px;
+    transition: all var(--transition);
+  }
+  .forecast-tab.active {
+    background: var(--accent-dim);
+    color: var(--accent);
+  }
+  .forecast-tab-content { display: none; }
+  .forecast-tab-content.active { display: block; }
+  .sounding-canvas {
+    width: 100%;
+    height: 300px;
+    display: block;
+    border-radius: var(--radius-sm);
+    margin-top: 8px;
+  }
+  .forecast-extra-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    background: var(--border-subtle);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    margin-top: 12px;
+  }
+
+  /* ═══════════════════════════════════════════
      DATA FRESHNESS BADGE
      ═══════════════════════════════════════════ */
   .freshness {
@@ -1045,6 +1178,13 @@
     </svg>
     <span>3D</span>
   </button>
+
+  <button class="layer-btn" id="xsectionToggle" title="Cross-Section (X)" aria-label="Draw vertical cross-section" aria-pressed="false">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+      <path d="M4 20V4"/><path d="M4 20h16"/><path d="M6 16l4-6 3 3 5-9"/>
+    </svg>
+    <span>X-Sect</span>
+  </button>
 </div>
 
 <!-- ════════════════════════════════════════════
@@ -1130,27 +1270,67 @@
     </div>
     <button class="forecast-close" id="forecastClose" aria-label="Close forecast panel">✕</button>
   </div>
-  <div class="forecast-temp-hero" id="forecastTemp">—<span>°F</span></div>
-  <div class="forecast-condition" id="forecastCondition">Tap anywhere on the map</div>
-  <div class="forecast-grid">
-    <div class="forecast-stat">
-      <div class="forecast-stat-label">Wind</div>
-      <div class="forecast-stat-value" id="fWind">—</div>
+  <div class="forecast-tabs" id="forecastTabs">
+    <button class="forecast-tab active" data-tab="current">Current</button>
+    <button class="forecast-tab" data-tab="sounding">Sounding</button>
+  </div>
+  <div class="forecast-tab-content active" id="tabCurrent">
+    <div class="forecast-temp-hero" id="forecastTemp">—<span>°F</span></div>
+    <div class="forecast-condition" id="forecastCondition">Tap anywhere on the map</div>
+    <div class="forecast-grid">
+      <div class="forecast-stat">
+        <div class="forecast-stat-label">Wind</div>
+        <div class="forecast-stat-value" id="fWind">—</div>
+      </div>
+      <div class="forecast-stat">
+        <div class="forecast-stat-label">Humidity</div>
+        <div class="forecast-stat-value" id="fHumidity">—</div>
+      </div>
+      <div class="forecast-stat">
+        <div class="forecast-stat-label">Dew Pt</div>
+        <div class="forecast-stat-value" id="fDewpoint">—</div>
+      </div>
+      <div class="forecast-stat">
+        <div class="forecast-stat-label">Precip</div>
+        <div class="forecast-stat-value" id="fPrecip">—</div>
+      </div>
     </div>
-    <div class="forecast-stat">
-      <div class="forecast-stat-label">Humidity</div>
-      <div class="forecast-stat-value" id="fHumidity">—</div>
-    </div>
-    <div class="forecast-stat">
-      <div class="forecast-stat-label">Dew Pt</div>
-      <div class="forecast-stat-value" id="fDewpoint">—</div>
-    </div>
-    <div class="forecast-stat">
-      <div class="forecast-stat-label">Precip</div>
-      <div class="forecast-stat-value" id="fPrecip">—</div>
+    <div class="forecast-extra-grid" id="forecastExtra" style="display:none">
+      <div class="forecast-stat">
+        <div class="forecast-stat-label">Solar</div>
+        <div class="forecast-stat-value" id="fSolar">—</div>
+      </div>
+      <div class="forecast-stat">
+        <div class="forecast-stat-label">UV Index</div>
+        <div class="forecast-stat-value" id="fUV">—</div>
+      </div>
+      <div class="forecast-stat">
+        <div class="forecast-stat-label">Cloud</div>
+        <div class="forecast-stat-value" id="fCloud">—</div>
+      </div>
     </div>
   </div>
+  <div class="forecast-tab-content" id="tabSounding">
+    <canvas class="sounding-canvas" id="soundingCanvas" width="400" height="300"></canvas>
+  </div>
 </div>
+
+<!-- ════════════════════════════════════════════
+     CROSS-SECTION PANEL
+     ════════════════════════════════════════════ -->
+<div class="xsection-panel" id="xsectionPanel">
+  <div class="xsection-header">
+    <div style="display:flex;align-items:baseline;gap:6px;">
+      <span class="xsection-title">Vertical Cross-Section</span>
+      <span class="xsection-subtitle" id="xsectionInfo">—</span>
+    </div>
+    <button class="xsection-close" id="xsectionClose" aria-label="Close cross-section">✕</button>
+  </div>
+  <div class="xsection-canvas-wrap">
+    <canvas id="xsectionCanvas"></canvas>
+  </div>
+</div>
+<div class="xsection-hint" id="xsectionHint">Click two points on the map to draw a cross-section</div>
 
 <!-- ════════════════════════════════════════════
      JAVASCRIPT
@@ -1216,6 +1396,83 @@
     satellite: false,
     alerts: false
   };
+
+  // ─── Atmospheric Profile Data ──────────────
+  // Binary profile.bin: 64-byte header + Int16 data
+  // Grid: 281×141 at 0.25°, 6 pressure levels, 5 vars per cell
+  const ATMOS = {
+    W: 281, H: 141,
+    LON_MIN: -130, LON_MAX: -60,
+    LAT_MIN: 20, LAT_MAX: 55,
+    LEVELS: [1000, 925, 850, 700, 500, 250],
+    HEADER_SIZE: 64,
+    VARS_PER_CELL: 5,
+    data: null,       // Int16Array when loaded
+    loaded: false
+  };
+
+  function loadAtmosphereProfile() {
+    const url = `${TILE_BASE}/atmosphere/profile.bin`;
+    fetch(url).then(r => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.arrayBuffer();
+    }).then(buf => {
+      const header = new DataView(buf, 0, ATMOS.HEADER_SIZE);
+      const magic = String.fromCharCode(header.getUint8(0), header.getUint8(1), header.getUint8(2), header.getUint8(3));
+      if (magic !== 'GALE') { console.warn('Bad atmosphere magic:', magic); return; }
+      ATMOS.data = new Int16Array(buf, ATMOS.HEADER_SIZE);
+      ATMOS.loaded = true;
+      console.log(`Atmosphere profile loaded: ${ATMOS.data.length} values (${(buf.byteLength/1024).toFixed(0)} KB)`);
+    }).catch(err => {
+      console.warn('Atmosphere profile not available:', err.message);
+    });
+  }
+
+  function sampleAtmosphere(lng, lat) {
+    if (!ATMOS.loaded) return null;
+    // Grid coords (fractional)
+    const gx = (lng - ATMOS.LON_MIN) / (ATMOS.LON_MAX - ATMOS.LON_MIN) * (ATMOS.W - 1);
+    const gy = (lat - ATMOS.LAT_MIN) / (ATMOS.LAT_MAX - ATMOS.LAT_MIN) * (ATMOS.H - 1);
+    if (gx < 0 || gx >= ATMOS.W || gy < 0 || gy >= ATMOS.H) return null;
+
+    // Bilinear interpolation
+    const x0 = Math.floor(gx), y0 = Math.floor(gy);
+    const x1 = Math.min(x0 + 1, ATMOS.W - 1), y1 = Math.min(y0 + 1, ATMOS.H - 1);
+    const fx = gx - x0, fy = gy - y0;
+
+    const cellsPerLevel = ATMOS.H * ATMOS.W * ATMOS.VARS_PER_CELL;
+    const result = [];
+
+    for (let li = 0; li < ATMOS.LEVELS.length; li++) {
+      const baseOffset = li * cellsPerLevel;
+      const vals = [0, 0, 0, 0, 0]; // temp, u, v, rh, hgt
+
+      for (let vi = 0; vi < 5; vi++) {
+        const v00 = ATMOS.data[baseOffset + (y0 * ATMOS.W + x0) * 5 + vi];
+        const v10 = ATMOS.data[baseOffset + (y0 * ATMOS.W + x1) * 5 + vi];
+        const v01 = ATMOS.data[baseOffset + (y1 * ATMOS.W + x0) * 5 + vi];
+        const v11 = ATMOS.data[baseOffset + (y1 * ATMOS.W + x1) * 5 + vi];
+        vals[vi] = v00 * (1 - fx) * (1 - fy) + v10 * fx * (1 - fy) +
+                   v01 * (1 - fx) * fy + v11 * fx * fy;
+      }
+
+      result.push({
+        pressure: ATMOS.LEVELS[li],
+        tempK: vals[0] / 10,
+        tempC: vals[0] / 10 - 273.15,
+        uWind: vals[1] / 100,
+        vWind: vals[2] / 100,
+        rh: vals[3] / 100,
+        hgt: vals[4]
+      });
+    }
+    return result;
+  }
+
+  // ─── Cross-Section State ──────────────────
+  let xsectionMode = false;
+  let xsectionPointA = null;
+  let xsectionLineSource = null;
 
   // ─── Screen Reader Announcements ─────────────────
   function announce(text) {
@@ -2824,6 +3081,12 @@
 
     const { lng, lat } = e.lngLat;
 
+    // Cross-section mode intercepts clicks
+    if (xsectionMode) {
+      handleXsectionClick(lng, lat);
+      return;
+    }
+
     // Only fetch forecast for CONUS
     if (lat < 24 || lat > 50 || lng < -125 || lng > -66) return;
 
@@ -2867,6 +3130,12 @@
       document.getElementById('fPrecip').textContent = precipIn > 0 ? `${precipIn} in` : 'None';
     }
     document.getElementById('forecastCondition').textContent = 'HRRR data · fetching NWS details...';
+
+    // Phase 1.5: Render sounding if atmosphere data loaded
+    renderSounding(lng, lat);
+
+    // Phase 1.6: Open-Meteo (solar, UV, clouds — fire-and-forget parallel)
+    fetchOpenMeteo(lng, lat);
 
     // Phase 2: Async NWS API (2-5s, fills in city name + supplemental data)
     try {
@@ -3093,6 +3362,491 @@
 
   locateBtn.addEventListener('click', doLocate);
 
+  // ─── Forecast Drawer Tabs ────────────────────
+  document.querySelectorAll('.forecast-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.forecast-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.forecast-tab-content').forEach(c => c.classList.remove('active'));
+      tab.classList.add('active');
+      const target = tab.dataset.tab === 'sounding' ? 'tabSounding' : 'tabCurrent';
+      document.getElementById(target).classList.add('active');
+    });
+  });
+
+  // ─── Atmospheric Sounding Renderer ──────────
+  function renderSounding(lng, lat) {
+    const profile = sampleAtmosphere(lng, lat);
+    const canvas = document.getElementById('soundingCanvas');
+    if (!canvas || !profile) return;
+
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr || 400;
+    canvas.height = rect.height * dpr || 300;
+    ctx.scale(dpr, dpr);
+    const W = rect.width || 400, H = rect.height || 300;
+
+    ctx.fillStyle = '#111827';
+    ctx.fillRect(0, 0, W, H);
+
+    // Axes
+    const margin = { top: 20, right: 30, bottom: 30, left: 45 };
+    const pw = W - margin.left - margin.right;
+    const ph = H - margin.top - margin.bottom;
+
+    // X: temperature (-80°C to +40°C)
+    const tempMin = -80, tempMax = 40;
+    const xScale = (t) => margin.left + (t - tempMin) / (tempMax - tempMin) * pw;
+
+    // Y: log-pressure (1000mb bottom, 250mb top)
+    const pTop = 250, pBot = 1000;
+    const yScale = (p) => margin.top + (Math.log(pBot) - Math.log(p)) / (Math.log(pBot) - Math.log(pTop)) * ph;
+
+    // Grid lines
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    ctx.lineWidth = 0.5;
+    for (let t = -60; t <= 40; t += 20) {
+      ctx.beginPath();
+      ctx.moveTo(xScale(t), margin.top);
+      ctx.lineTo(xScale(t), H - margin.bottom);
+      ctx.stroke();
+    }
+    for (const p of [1000, 925, 850, 700, 500, 250]) {
+      ctx.beginPath();
+      ctx.moveTo(margin.left, yScale(p));
+      ctx.lineTo(W - margin.right, yScale(p));
+      ctx.stroke();
+    }
+
+    // Axis labels
+    ctx.fillStyle = '#64748b';
+    ctx.font = '9px JetBrains Mono, monospace';
+    ctx.textAlign = 'center';
+    for (let t = -60; t <= 40; t += 20) {
+      ctx.fillText(`${t}°`, xScale(t), H - margin.bottom + 14);
+    }
+    ctx.textAlign = 'right';
+    for (const p of [1000, 925, 850, 700, 500, 250]) {
+      ctx.fillText(`${p}`, margin.left - 5, yScale(p) + 3);
+    }
+    ctx.fillText('mb', margin.left - 5, margin.top - 6);
+    ctx.textAlign = 'center';
+    ctx.fillText('°C', W / 2, H - 2);
+
+    // 0°C isotherm
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.2)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(xScale(0), margin.top);
+    ctx.lineTo(xScale(0), H - margin.bottom);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Temperature line (red)
+    ctx.strokeStyle = '#ef4444';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    profile.forEach((lev, i) => {
+      const x = xScale(lev.tempC);
+      const y = yScale(lev.pressure);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    // Dewpoint line (green) — Td ≈ T - (100 - RH) / 5
+    ctx.strokeStyle = '#10b981';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    profile.forEach((lev, i) => {
+      const td = lev.tempC - (100 - lev.rh) / 5;
+      const x = xScale(td);
+      const y = yScale(lev.pressure);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    // Wind barbs at each level
+    profile.forEach(lev => {
+      const y = yScale(lev.pressure);
+      const x = W - margin.right + 10;
+      const speed = Math.sqrt(lev.uWind * lev.uWind + lev.vWind * lev.vWind) * 1.944; // knots
+      const dir = (Math.atan2(-lev.uWind, -lev.vWind) * 180 / Math.PI + 360) % 360;
+      drawWindBarb(ctx, x, y, speed, dir);
+    });
+
+    // Legend
+    ctx.fillStyle = '#ef4444'; ctx.fillRect(margin.left + 4, margin.top + 2, 12, 2);
+    ctx.fillStyle = '#94a3b8'; ctx.font = '9px DM Sans, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('Temp', margin.left + 20, margin.top + 7);
+    ctx.fillStyle = '#10b981'; ctx.fillRect(margin.left + 60, margin.top + 2, 12, 2);
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillText('Dewpt', margin.left + 76, margin.top + 7);
+  }
+
+  function drawWindBarb(ctx, cx, cy, speedKnots, dirDeg) {
+    if (speedKnots < 2) {
+      ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(cx, cy, 3, 0, Math.PI * 2); ctx.stroke();
+      return;
+    }
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate((dirDeg + 180) * Math.PI / 180);
+    ctx.strokeStyle = '#94a3b8';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, 0); ctx.lineTo(0, -14); ctx.stroke();
+
+    let remaining = speedKnots;
+    let pos = -14;
+    while (remaining >= 50) {
+      ctx.beginPath(); ctx.moveTo(0, pos); ctx.lineTo(6, pos + 2); ctx.lineTo(0, pos + 4);
+      ctx.fillStyle = '#94a3b8'; ctx.fill();
+      pos += 5; remaining -= 50;
+    }
+    while (remaining >= 10) {
+      ctx.beginPath(); ctx.moveTo(0, pos); ctx.lineTo(6, pos + 3); ctx.stroke();
+      pos += 3; remaining -= 10;
+    }
+    if (remaining >= 5) {
+      ctx.beginPath(); ctx.moveTo(0, pos); ctx.lineTo(3, pos + 1.5); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // ─── Open-Meteo Integration ─────────────────
+  function fetchOpenMeteo(lng, lat) {
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(4)}&longitude=${lng.toFixed(4)}&current=shortwave_radiation,uv_index,cloud_cover`;
+    fetch(url).then(r => r.json()).then(data => {
+      const c = data.current;
+      if (!c) return;
+      const extraGrid = document.getElementById('forecastExtra');
+      extraGrid.style.display = '';
+      document.getElementById('fSolar').textContent = c.shortwave_radiation != null ? `${Math.round(c.shortwave_radiation)} W/m²` : '—';
+      document.getElementById('fUV').textContent = c.uv_index != null ? c.uv_index.toFixed(1) : '—';
+      document.getElementById('fCloud').textContent = c.cloud_cover != null ? `${Math.round(c.cloud_cover)}%` : '—';
+    }).catch(() => {});
+  }
+
+  // ─── Cross-Section Mode ────────────────────
+  const xsectionPanel = document.getElementById('xsectionPanel');
+  const xsectionHint = document.getElementById('xsectionHint');
+  const xsectionToggle = document.getElementById('xsectionToggle');
+
+  function toggleXsectionMode() {
+    xsectionMode = !xsectionMode;
+    xsectionPointA = null;
+    xsectionToggle.classList.toggle('active', xsectionMode);
+    xsectionToggle.setAttribute('aria-pressed', String(xsectionMode));
+    xsectionHint.classList.toggle('visible', xsectionMode);
+    xsectionHint.textContent = 'Click first point on the map';
+    map.getCanvas().style.cursor = xsectionMode ? 'crosshair' : '';
+    if (!xsectionMode) {
+      xsectionPanel.classList.remove('open');
+      if (map.getSource('xsection-line')) {
+        map.getSource('xsection-line').setData({ type: 'FeatureCollection', features: [] });
+      }
+    }
+    announce(xsectionMode ? 'Cross-section mode: click two points' : 'Cross-section mode off');
+  }
+
+  xsectionToggle.addEventListener('click', toggleXsectionMode);
+  document.getElementById('xsectionClose').addEventListener('click', () => {
+    xsectionPanel.classList.remove('open');
+    if (xsectionMode) toggleXsectionMode();
+  });
+
+  function handleXsectionClick(lng, lat) {
+    if (!xsectionPointA) {
+      xsectionPointA = [lng, lat];
+      xsectionHint.textContent = 'Click second point';
+
+      // Add marker-like point on map
+      if (!map.getSource('xsection-line')) {
+        map.addSource('xsection-line', {
+          type: 'geojson',
+          data: { type: 'FeatureCollection', features: [] }
+        });
+        map.addLayer({
+          id: 'xsection-line-layer',
+          type: 'line',
+          source: 'xsection-line',
+          paint: { 'line-color': '#38bdf8', 'line-width': 2, 'line-dasharray': [4, 2] }
+        });
+        map.addLayer({
+          id: 'xsection-points-layer',
+          type: 'circle',
+          source: 'xsection-line',
+          filter: ['==', '$type', 'Point'],
+          paint: { 'circle-radius': 5, 'circle-color': '#38bdf8', 'circle-stroke-width': 2, 'circle-stroke-color': '#0a0e17' }
+        });
+      }
+      map.getSource('xsection-line').setData({
+        type: 'FeatureCollection',
+        features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: [lng, lat] } }]
+      });
+    } else {
+      const ptB = [lng, lat];
+      xsectionHint.classList.remove('visible');
+      map.getCanvas().style.cursor = '';
+
+      // Draw line A→B
+      map.getSource('xsection-line').setData({
+        type: 'FeatureCollection',
+        features: [
+          { type: 'Feature', geometry: { type: 'LineString', coordinates: [xsectionPointA, ptB] } },
+          { type: 'Feature', geometry: { type: 'Point', coordinates: xsectionPointA } },
+          { type: 'Feature', geometry: { type: 'Point', coordinates: ptB } }
+        ]
+      });
+
+      renderCrossSection(xsectionPointA, ptB);
+      xsectionPanel.classList.add('open');
+      xsectionMode = false;
+      xsectionToggle.classList.remove('active');
+      xsectionToggle.setAttribute('aria-pressed', 'false');
+      xsectionPointA = null;
+    }
+  }
+
+  function renderCrossSection(ptA, ptB) {
+    if (!ATMOS.loaded) return;
+
+    const canvas = document.getElementById('xsectionCanvas');
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.parentElement.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    const W = rect.width, H = rect.height;
+
+    // Sample 50 points along transect
+    const numSamples = 50;
+    const profiles = [];
+    for (let i = 0; i <= numSamples; i++) {
+      const t = i / numSamples;
+      const lng = ptA[0] + (ptB[0] - ptA[0]) * t;
+      const lat = ptA[1] + (ptB[1] - ptA[1]) * t;
+      profiles.push(sampleAtmosphere(lng, lat));
+    }
+
+    // Distance in miles (haversine)
+    const R = 3959;
+    const dLat = (ptB[1] - ptA[1]) * Math.PI / 180;
+    const dLon = (ptB[0] - ptA[0]) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(ptA[1] * Math.PI / 180) * Math.cos(ptB[1] * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+    const totalMiles = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    document.getElementById('xsectionInfo').textContent =
+      `${totalMiles.toFixed(0)} mi · ${ptA[1].toFixed(2)}°N,${Math.abs(ptA[0]).toFixed(2)}°W → ${ptB[1].toFixed(2)}°N,${Math.abs(ptB[0]).toFixed(2)}°W`;
+
+    // Clear
+    ctx.fillStyle = '#111827';
+    ctx.fillRect(0, 0, W, H);
+
+    const margin = { top: 16, right: 16, bottom: 28, left: 42 };
+    const pw = W - margin.left - margin.right;
+    const ph = H - margin.top - margin.bottom;
+
+    // Scales
+    const pTop = 250, pBot = 1000;
+    const xScale = (i) => margin.left + (i / numSamples) * pw;
+    const yScale = (p) => margin.top + (Math.log(pBot) - Math.log(p)) / (Math.log(pBot) - Math.log(pTop)) * ph;
+
+    // Temperature color ramp (same as temp tiles)
+    function tempColor(c) {
+      const t = (c + 40) / 80; // -40C → +40C mapped to 0→1
+      const clamped = Math.max(0, Math.min(1, t));
+      if (clamped < 0.25) return `hsl(240, 80%, ${30 + clamped * 4 * 40}%)`;
+      if (clamped < 0.5) return `hsl(${240 - (clamped - 0.25) * 4 * 120}, 80%, 60%)`;
+      if (clamped < 0.75) return `hsl(${120 - (clamped - 0.5) * 4 * 60}, 90%, 50%)`;
+      return `hsl(${60 - (clamped - 0.75) * 4 * 60}, 100%, ${50 - (clamped - 0.75) * 4 * 20}%)`;
+    }
+
+    // Fill temperature (colored rectangles)
+    const levels = ATMOS.LEVELS;
+    for (let i = 0; i < numSamples; i++) {
+      const p0 = profiles[i], p1 = profiles[i + 1];
+      if (!p0 || !p1) continue;
+      const x0 = xScale(i), x1 = xScale(i + 1);
+      const cellW = x1 - x0 + 1;
+
+      for (let li = 0; li < levels.length - 1; li++) {
+        const y0 = yScale(levels[li]);
+        const y1 = yScale(levels[li + 1]);
+        const cellH = y1 - y0;
+        // Average temp of 4 corners
+        const avgC = (p0[li].tempC + p1[li].tempC + p0[li + 1].tempC + p1[li + 1].tempC) / 4;
+        ctx.fillStyle = tempColor(avgC);
+        ctx.globalAlpha = 0.7;
+        ctx.fillRect(x0, y0, cellW, cellH);
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    // Humidity contours (50%, 75%, 90%)
+    [50, 75, 90].forEach((rhThreshold, ci) => {
+      ctx.strokeStyle = ci === 2 ? 'rgba(16,185,129,0.6)' : ci === 1 ? 'rgba(16,185,129,0.4)' : 'rgba(16,185,129,0.2)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 3]);
+      for (let li = 0; li < levels.length; li++) {
+        ctx.beginPath();
+        let started = false;
+        for (let i = 0; i <= numSamples; i++) {
+          const p = profiles[i];
+          if (!p || p[li].rh < rhThreshold) { started = false; continue; }
+          const x = xScale(i), y = yScale(levels[li]);
+          if (!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      }
+    });
+    ctx.setLineDash([]);
+
+    // Wind barbs at grid intersections (every 5th sample, every level)
+    for (let i = 0; i <= numSamples; i += 5) {
+      const p = profiles[i];
+      if (!p) continue;
+      for (let li = 0; li < levels.length; li++) {
+        const x = xScale(i), y = yScale(levels[li]);
+        const speed = Math.sqrt(p[li].uWind ** 2 + p[li].vWind ** 2) * 1.944;
+        const dir = (Math.atan2(-p[li].uWind, -p[li].vWind) * 180 / Math.PI + 360) % 360;
+        drawWindBarb(ctx, x, y, speed, dir);
+      }
+    }
+
+    // Axes
+    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(margin.left, margin.top);
+    ctx.lineTo(margin.left, H - margin.bottom);
+    ctx.lineTo(W - margin.right, H - margin.bottom);
+    ctx.stroke();
+
+    // Pressure labels
+    ctx.fillStyle = '#64748b';
+    ctx.font = '9px JetBrains Mono, monospace';
+    ctx.textAlign = 'right';
+    for (const p of levels) {
+      ctx.fillText(`${p}`, margin.left - 4, yScale(p) + 3);
+    }
+    ctx.fillText('mb', margin.left - 4, margin.top - 4);
+
+    // Distance labels
+    ctx.textAlign = 'center';
+    for (let d = 0; d <= totalMiles; d += Math.max(50, Math.round(totalMiles / 5 / 50) * 50)) {
+      const x = margin.left + (d / totalMiles) * pw;
+      ctx.fillText(`${d}mi`, x, H - margin.bottom + 14);
+    }
+    // Always label endpoint
+    ctx.fillText(`${Math.round(totalMiles)}mi`, W - margin.right, H - margin.bottom + 14);
+    ctx.fillText('A', margin.left, H - margin.bottom + 14);
+  }
+
+  // ─── 3D Atmospheric Columns ────────────────
+  let atmosColumnsVisible = false;
+
+  function toggleAtmosColumns() {
+    atmosColumnsVisible = !atmosColumnsVisible;
+    if (atmosColumnsVisible) {
+      updateAtmosColumns();
+    } else if (map.getLayer('atmos-columns-layer')) {
+      map.setLayoutProperty('atmos-columns-layer', 'visibility', 'none');
+    }
+    announce(`Atmosphere columns ${atmosColumnsVisible ? 'on' : 'off'}`);
+  }
+
+  function updateAtmosColumns() {
+    if (!atmosColumnsVisible || !ATMOS.loaded) return;
+    if (map.getZoom() < 4) {
+      if (map.getLayer('atmos-columns-layer')) {
+        map.setLayoutProperty('atmos-columns-layer', 'visibility', 'none');
+      }
+      return;
+    }
+
+    const bounds = map.getBounds();
+    const step = 1.0; // 1° grid for columns
+    const features = [];
+
+    const west = Math.max(bounds.getWest(), ATMOS.LON_MIN);
+    const east = Math.min(bounds.getEast(), ATMOS.LON_MAX);
+    const south = Math.max(bounds.getSouth(), ATMOS.LAT_MIN);
+    const north = Math.min(bounds.getNorth(), ATMOS.LAT_MAX);
+
+    for (let lon = Math.ceil(west / step) * step; lon <= east; lon += step) {
+      for (let lat = Math.ceil(south / step) * step; lat <= north; lat += step) {
+        const profile = sampleAtmosphere(lon, lat);
+        if (!profile) continue;
+
+        const surfTemp = profile[0].tempC;
+        const surfHgt = profile[0].hgt;
+        const topHgt = profile[profile.length - 1].hgt;
+        const height = Math.max(100, (topHgt - surfHgt) * 0.3); // scale for visibility
+
+        // Color by surface temp (-30C..+40C mapped to blue..red)
+        const t = Math.max(0, Math.min(1, (surfTemp + 30) / 70));
+        const r = Math.round(t * 255);
+        const b = Math.round((1 - t) * 255);
+        const color = `rgb(${r},${80},${b})`;
+
+        const half = step * 0.4;
+        features.push({
+          type: 'Feature',
+          geometry: {
+            type: 'Polygon',
+            coordinates: [[
+              [lon - half, lat - half],
+              [lon + half, lat - half],
+              [lon + half, lat + half],
+              [lon - half, lat + half],
+              [lon - half, lat - half]
+            ]]
+          },
+          properties: { height, color }
+        });
+      }
+    }
+
+    const geojson = { type: 'FeatureCollection', features };
+
+    if (!map.getSource('atmos-columns')) {
+      map.addSource('atmos-columns', { type: 'geojson', data: geojson });
+      map.addLayer({
+        id: 'atmos-columns-layer',
+        type: 'fill-extrusion',
+        source: 'atmos-columns',
+        paint: {
+          'fill-extrusion-color': ['get', 'color'],
+          'fill-extrusion-height': ['get', 'height'],
+          'fill-extrusion-base': 0,
+          'fill-extrusion-opacity': 0.35
+        }
+      });
+    } else {
+      map.getSource('atmos-columns').setData(geojson);
+      map.setLayoutProperty('atmos-columns-layer', 'visibility', 'visible');
+    }
+  }
+
+  // Debounced update on map move
+  let atmosColumnsTimer = null;
+  map.on('moveend', () => {
+    if (!atmosColumnsVisible) return;
+    clearTimeout(atmosColumnsTimer);
+    atmosColumnsTimer = setTimeout(updateAtmosColumns, 300);
+  });
+
+  // ─── Load Atmosphere on Startup ────────────
+  map.on('load', () => {
+    loadAtmosphereProfile();
+  });
+
   // ─── Keyboard Shortcuts ─────────────────────
   document.addEventListener('keydown', (e) => {
     // Allow Escape from within search input to close search
@@ -3106,7 +3860,7 @@
     if (e.target.tagName === 'INPUT') return;
     switch(e.key) {
       case '/': e.preventDefault(); openSearch(); break;
-      case 'Escape': closeSearch(); drawer.classList.remove('open'); drawer.setAttribute('aria-hidden', 'true'); sidebar.classList.remove('open'); layersToggle.classList.remove('active'); layersToggle.setAttribute('aria-expanded', 'false'); break;
+      case 'Escape': closeSearch(); drawer.classList.remove('open'); drawer.setAttribute('aria-hidden', 'true'); sidebar.classList.remove('open'); layersToggle.classList.remove('active'); layersToggle.setAttribute('aria-expanded', 'false'); xsectionPanel.classList.remove('open'); if (xsectionMode) toggleXsectionMode(); break;
       case ' ': e.preventDefault(); playBtn.click(); break;
       case 'r': document.querySelector('[data-layer="radar"]').click(); break;
       case 't': document.querySelector('[data-layer="temp"]').click(); break;
@@ -3114,6 +3868,8 @@
       case 'p': document.querySelector('[data-layer="precip"]').click(); break;
       case 's': document.querySelector('[data-layer="satellite"]').click(); break;
       case 'v': toggleView(); break;
+      case 'x': toggleXsectionMode(); break;
+      case 'a': toggleAtmosColumns(); break;
     }
   });
 

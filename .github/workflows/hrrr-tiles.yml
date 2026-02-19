@@ -14,10 +14,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install GDAL
+      - name: Install GDAL + numpy
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq gdal-bin python3-gdal
+          sudo apt-get install -y -qq gdal-bin python3-gdal python3-numpy
 
       - name: Run temperature pipeline
         run: python3 scripts/hrrr_temperature.py
@@ -27,6 +27,9 @@ jobs:
 
       - name: Run precipitation pipeline
         run: python3 scripts/hrrr_precipitation.py
+
+      - name: Run atmosphere pipeline
+        run: python3 scripts/hrrr_atmosphere.py
 
       - name: Sync tiles to R2
         env:
@@ -57,3 +60,18 @@ jobs:
               --content-type "application/json" \
               --no-progress
           done
+
+          # Atmosphere profile: single binary file (not tiles)
+          if [ -f "scripts/output/atmosphere/profile.bin" ]; then
+            echo "Syncing atmosphere profile..."
+            aws s3 cp "scripts/output/atmosphere/profile.bin" "s3://gale-tiles/atmosphere/profile.bin" \
+              --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" \
+              --cache-control "public, max-age=3600" \
+              --content-type "application/octet-stream" \
+              --no-progress
+            aws s3 cp "scripts/output/atmosphere/metadata.json" "s3://gale-tiles/atmosphere/metadata.json" \
+              --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" \
+              --cache-control "public, max-age=300" \
+              --content-type "application/json" \
+              --no-progress
+          fi

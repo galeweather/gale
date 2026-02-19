@@ -12,6 +12,7 @@ LAYER_DIR_MAP = {
     "temperature-f01": ["temperature-f01"],
     "precipitation": ["precipitation"],
     "wind": ["wind", "wind-direction", "wind-u", "wind-v"],
+    "atmosphere": ["atmosphere"],
 }
 
 # Wind output dirs come from process.py in this fixed order
@@ -48,7 +49,14 @@ def upload_tiles(
 
     prefixes = LAYER_DIR_MAP.get(layer, [layer])
 
-    if layer == "wind":
+    if layer == "atmosphere":
+        # Atmosphere: upload profile.bin directly (not tile grid)
+        output_dir = output_dirs[0]
+        profile_path = os.path.join(output_dir, "profile.bin")
+        key = "atmosphere/profile.bin"
+        if key in presigned_urls and os.path.exists(profile_path):
+            uploads.append((profile_path, presigned_urls[key], "application/octet-stream"))
+    elif layer == "wind":
         # Wind has 4 output dirs in fixed order: speed, direction, u, v
         for i, output_dir in enumerate(output_dirs):
             prefix = WIND_PREFIX_ORDER[i]
@@ -150,6 +158,16 @@ def upload_metadata(
         elif prefix == "wind-v":
             metadata["variable"] = "VGRD:10m above ground (v-component)"
             metadata["encoding"] = "grayscale: pixel / 255 * 80 - 40 = m/s"
+        elif prefix == "atmosphere":
+            metadata["variable"] = "HRRR pressure-level profile (6 levels × 5 vars)"
+            metadata["levels_mb"] = [1000, 925, 850, 700, 500, 250]
+            metadata["grid"] = {
+                "width": 281, "height": 141,
+                "lon_min": -130, "lon_max": -60,
+                "lat_min": 20, "lat_max": 55,
+                "resolution_deg": 0.25,
+            }
+            metadata["encoding"] = "binary profile.bin: int16 per value (TMP×10, UGRD×100, VGRD×100, RH×100, HGT)"
 
         data = json.dumps(metadata, indent=2).encode()
         req = Request(url, data=data, method="PUT")

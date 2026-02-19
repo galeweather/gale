@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from auth import verify_worker
 from config import settings
 from models import get_db
-from r2 import generate_presigned_urls, generate_multi_prefix_urls
+from r2 import generate_presigned_urls, generate_multi_prefix_urls, generate_single_file_urls
 from credits import award_credits
 
 router = APIRouter(prefix="/v1/packets", tags=["packets"])
@@ -16,10 +16,11 @@ LAYER_PREFIXES = {
     "temperature-f01": ["temperature-f01"],
     "wind": ["wind", "wind-direction", "wind-u", "wind-v"],
     "precipitation": ["precipitation"],
+    "atmosphere": ["atmosphere"],
 }
 
 # All layers created per HRRR run
-LAYERS_PER_RUN = ["temperature", "temperature-f01", "wind", "precipitation"]
+LAYERS_PER_RUN = ["temperature", "temperature-f01", "wind", "precipitation", "atmosphere"]
 
 
 def create_packets_for_run(hrrr_date: str, hrrr_hour: str):
@@ -141,7 +142,9 @@ def get_next_packet(authorization: str = Header()) -> PacketResponse | dict:
 
         # Generate presigned URLs for all output prefixes
         prefixes = LAYER_PREFIXES.get(packet["layer"], [packet["output_prefix"]])
-        if len(prefixes) > 1:
+        if packet["layer"] == "atmosphere":
+            urls = generate_single_file_urls("atmosphere", ["profile.bin", "metadata.json"])
+        elif len(prefixes) > 1:
             urls = generate_multi_prefix_urls(prefixes)
         else:
             urls = generate_presigned_urls(prefixes[0])

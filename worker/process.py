@@ -4,17 +4,33 @@ Handles all layer types:
 - temperature / temperature-f01: single GRIB → gdalwarp → gdaldem → gdal2tiles
 - wind: download UGRD + VGRD → warp → gdal_calc (speed, dir) → color-relief × 4 → tiles × 4
 - precipitation: single GRIB (f01) → gdalwarp → gdaldem → gdal2tiles
+- atmosphere: 6 levels × 5 vars → binary profile.bin
 """
 
+import struct
 import subprocess
 import os
 import shutil
 import hashlib
+import numpy as np
 from urllib.request import urlopen, Request
 
 RAMP_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ramps")
 WORK_DIR = "/tmp/gale-worker"
 NOMADS_BASE = "https://nomads.ncep.noaa.gov/cgi-bin/filter_hrrr_2d.pl"
+NOMADS_PRS = "https://nomads.ncep.noaa.gov/cgi-bin/filter_hrrr_prs.pl"
+
+# Atmosphere profile constants
+ATMOS_GRID_W = 281
+ATMOS_GRID_H = 141
+ATMOS_LON_MIN, ATMOS_LON_MAX = -130.0, -60.0
+ATMOS_LAT_MIN, ATMOS_LAT_MAX = 20.0, 55.0
+ATMOS_LEVELS = [1000, 925, 850, 700, 500, 250]
+ATMOS_VARS = ["TMP", "UGRD", "VGRD", "RH", "HGT"]
+ATMOS_LEVEL_NAMES = {
+    1000: "1000_mb", 925: "925_mb", 850: "850_mb",
+    700: "700_mb", 500: "500_mb", 250: "250_mb",
+}
 
 
 def download(url: str, dest: str, label: str = "GRIB2"):
@@ -261,6 +277,133 @@ def process_wind(date_str: str, hour_str: str) -> tuple[list[str], str]:
     return output_dirs, result_hash
 
 
+def _nomads_prs_url(date_str: str, hour_str: str, variable: str, level_mb: int) -> str:
+    """Build NOMADS filter URL for a HRRR pressure-level variable."""
+    level_name = ATMOS_LEVEL_NAMES[level_mb]
+    return (
+        f"{NOMADS_PRS}?dir=%2Fhrrr.{date_str}%2Fconus"
+        f"&file=hrrr.t{hour_str}z.wrfprsf00.grib2"
+        f"&var_{variable}=on&lev_{level_name}=on"
+    )
+
+
+def _grib_to_array(grib_path: str, work_dir: str, tag: str) -> np.ndarray:
+    """Convert GRIB2 → warped GeoTIFF → numpy array (GRID_H × GRID_W)."""
+    tif_path = os.path.join(work_dir, f"{tag}.tif")
+    raw_path = os.path.join(work_dir, f"{tag}.raw")
+
+    run_cmd([
+        "gdalwarp",
+        "-t_srs", "EPSG:4326",
+        "-te", str(ATMOS_LON_MIN), str(ATMOS_LAT_MIN),
+        str(ATMOS_LON_MAX), str(ATMOS_LAT_MAX),
+        "-ts", str(ATMOS_GRID_W), str(ATMOS_GRID_H),
+        "-r", "bilinear",
+        "-of", "GTiff",
+        grib_path, tif_path,
+    ], f"{tag}: GRIB2 → GeoTIFF")
+
+    run_cmd([
+        "gdal_translate", "-of", "ENVI", "-ot", "Float32",
+        tif_path, raw_path,
+    ], f"{tag}: GeoTIFF → raw")
+
+    data = np.fromfile(raw_path, dtype=np.float32)
+    grid = data.reshape(ATMOS_GRID_H, ATMOS_GRID_W)
+    grid = np.flipud(grid)  # north-first → south-first (lat 20→55)
+
+    for f in [grib_path, tif_path, raw_path, raw_path + ".hdr"]:
+        if os.path.exists(f):
+            os.remove(f)
+
+    return grid
+
+
+def process_atmosphere(date_str: str, hour_str: str) -> tuple[list[str], str]:
+    """Process atmosphere profile: 6 levels × 5 vars → profile.bin.
+
+    Returns (output_dirs, result_hash) where output_dirs contains
+    a single directory with profile.bin.
+    """
+    work = os.path.join(WORK_DIR, "atmosphere")
+    os.makedirs(work, exist_ok=True)
+    output_dir = os.path.join(work, "output")
+    os.makedirs(output_dir, exist_ok=True)
+
+    all_data = {}
+    downloaded = 0
+
+    for level in ATMOS_LEVELS:
+        for var in ATMOS_VARS:
+            tag = f"{var}_{level}mb"
+            grib_path = os.path.join(work, f"{tag}.grib2")
+            url = _nomads_prs_url(date_str, hour_str, var, level)
+            try:
+                download(url, grib_path, tag)
+                all_data[(level, var)] = _grib_to_array(grib_path, work, tag)
+                downloaded += 1
+            except Exception as e:
+                print(f"  WARNING: Failed {tag}: {e}")
+                all_data[(level, var)] = np.zeros(
+                    (ATMOS_GRID_H, ATMOS_GRID_W), dtype=np.float32
+                )
+
+    if downloaded < 20:
+        raise RuntimeError(f"Only got {downloaded}/30 atmosphere variables")
+
+    print(f"  Atmosphere: {downloaded}/30 variables downloaded")
+
+    # Pack binary profile
+    header = bytearray(64)
+    header[0:4] = b"GALE"
+    struct.pack_into("<H", header, 4, 1)  # version
+    struct.pack_into("<H", header, 6, ATMOS_GRID_W)
+    struct.pack_into("<H", header, 8, ATMOS_GRID_H)
+    struct.pack_into("<H", header, 10, len(ATMOS_LEVELS))
+    struct.pack_into("<i", header, 12, int(ATMOS_LON_MIN * 1000))
+    struct.pack_into("<i", header, 16, int(ATMOS_LON_MAX * 1000))
+    struct.pack_into("<i", header, 20, int(ATMOS_LAT_MIN * 1000))
+    struct.pack_into("<i", header, 24, int(ATMOS_LAT_MAX * 1000))
+    for i, p in enumerate(ATMOS_LEVELS):
+        struct.pack_into("<H", header, 28 + i * 2, p)
+    struct.pack_into("<I", header, 40, int(date_str))
+    struct.pack_into("<I", header, 44, int(hour_str))
+
+    num_values = len(ATMOS_LEVELS) * ATMOS_GRID_H * ATMOS_GRID_W * 5
+    data_buf = np.zeros(num_values, dtype=np.int16)
+
+    idx = 0
+    for level in ATMOS_LEVELS:
+        tmp = all_data[(level, "TMP")]
+        ugrd = all_data[(level, "UGRD")]
+        vgrd = all_data[(level, "VGRD")]
+        rh = all_data[(level, "RH")]
+        hgt = all_data[(level, "HGT")]
+
+        for row in range(ATMOS_GRID_H):
+            for col in range(ATMOS_GRID_W):
+                data_buf[idx]     = int(np.clip(tmp[row, col] * 10, -32768, 32767))
+                data_buf[idx + 1] = int(np.clip(ugrd[row, col] * 100, -32768, 32767))
+                data_buf[idx + 2] = int(np.clip(vgrd[row, col] * 100, -32768, 32767))
+                data_buf[idx + 3] = int(np.clip(rh[row, col] * 100, -32768, 32767))
+                data_buf[idx + 4] = int(np.clip(hgt[row, col], -32768, 32767))
+                idx += 5
+
+    profile_path = os.path.join(output_dir, "profile.bin")
+    with open(profile_path, "wb") as f:
+        f.write(bytes(header))
+        f.write(data_buf.tobytes())
+
+    file_size = os.path.getsize(profile_path)
+    print(f"  Wrote profile.bin ({file_size / 1024:.0f} KB)")
+
+    # Hash the output
+    with open(profile_path, "rb") as f:
+        result_hash = hashlib.sha256(f.read()).hexdigest()
+
+    return [output_dir], result_hash
+
+
 def process_packet(layer: str, hrrr_date: str, hrrr_hour: str,
                    forecast_hour: str) -> tuple[list[str], str]:
     """Route to the correct processor based on layer type.
@@ -280,5 +423,7 @@ def process_packet(layer: str, hrrr_date: str, hrrr_hour: str,
         return process_wind(hrrr_date, hrrr_hour)
     elif layer == "precipitation":
         return process_precipitation(hrrr_date, hrrr_hour)
+    elif layer == "atmosphere":
+        return process_atmosphere(hrrr_date, hrrr_hour)
     else:
         raise ValueError(f"Unknown layer: {layer}")
