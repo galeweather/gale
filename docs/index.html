@@ -373,6 +373,42 @@
 
   .layer-btn svg { width: 16px; height: 16px; flex-shrink: 0; }
 
+  .view-toggle-group {
+    display: flex;
+    margin: 4px 8px;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    border: 1px solid var(--border-subtle);
+  }
+
+  .view-toggle-group button {
+    flex: 1;
+    padding: 7px 0;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-family: var(--sans);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition);
+    letter-spacing: 0.02em;
+  }
+
+  .view-toggle-group button:not(:last-child) {
+    border-right: 1px solid var(--border-subtle);
+  }
+
+  .view-toggle-group button:hover {
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-primary);
+  }
+
+  .view-toggle-group button.active {
+    background: var(--accent-dim);
+    color: var(--accent);
+  }
+
   .layer-divider {
     height: 1px;
     background: var(--border-subtle);
@@ -1315,12 +1351,11 @@
 
   <div class="layer-divider"></div>
 
-  <button class="layer-btn active" id="viewToggle" title="Cycle view: Top / Tilt / 3D (V)" aria-label="Cycle view mode">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-      <path d="M12 3L2 9l10 6 10-6-10-6z"/><path d="M2 15l10 6 10-6"/><path d="M2 12l10 6 10-6"/>
-    </svg>
-    <span>Tilt</span>
-  </button>
+  <div class="view-toggle-group" id="viewToggleGroup">
+    <button data-view="0" title="Top-down 2D view">2D</button>
+    <button data-view="1" class="active" title="Tilted view with terrain">Tilt</button>
+    <button data-view="2" title="Full 3D terrain view">3D</button>
+  </div>
 
   <button class="layer-btn active" id="elevRadarToggle" title="Elevated Radar (E)" aria-label="Toggle elevated radar" aria-pressed="true">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
@@ -3503,14 +3538,15 @@
     elevRadarTimer = setTimeout(updateElevatedRadar, 300);
   });
 
-  // ─── View Mode (3-state: Top / Tilt / 3D) ──────
+  // ─── View Mode (3-state: 2D / Tilt / 3D) ──────
   const VIEW_MODES = [
-    { name: 'Top', pitch: 0, terrain: false },
+    { name: '2D', pitch: 0, terrain: false },
     { name: 'Tilt', pitch: 45, terrain: true },
     { name: '3D', pitch: 70, terrain: true }
   ];
   let viewMode = 1; // default: Tilt
-  const viewToggle = document.getElementById('viewToggle');
+  const viewToggleGroup = document.getElementById('viewToggleGroup');
+  const viewBtns = viewToggleGroup.querySelectorAll('button');
 
   function setViewMode(mode) {
     viewMode = mode;
@@ -3519,8 +3555,7 @@
     if (mode === 0) opts.bearing = 0; // reset north for top-down
     map.easeTo(opts);
     map.setTerrain(v.terrain ? { source: 'dem', exaggeration: 1.5 } : null);
-    viewToggle.classList.toggle('active', viewMode > 0);
-    viewToggle.querySelector('span').textContent = v.name;
+    viewBtns.forEach(b => b.classList.toggle('active', parseInt(b.dataset.view) === mode));
     announce(`${v.name} view`);
   }
 
@@ -3528,7 +3563,9 @@
     setViewMode((viewMode + 1) % VIEW_MODES.length);
   }
 
-  viewToggle.addEventListener('click', cycleView);
+  viewBtns.forEach(btn => {
+    btn.addEventListener('click', () => setViewMode(parseInt(btn.dataset.view)));
+  });
 
   // Elevated radar button
   const elevRadarToggle = document.getElementById('elevRadarToggle');
