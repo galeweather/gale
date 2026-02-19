@@ -49,8 +49,8 @@ def status():
 
         return {
             "workers": {
-                "total": workers["total"] if workers else 0,
-                "active": workers["active"] if workers else 0,
+                "total": workers["total"] or 0 if workers else 0,
+                "active": workers["active"] or 0 if workers else 0,
             },
             "packets": packet_stats,
             "latest_run": dict(latest_run) if latest_run else None,
