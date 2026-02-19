@@ -1754,7 +1754,7 @@
     zoom: 6,
     maxZoom: 12,
     minZoom: 2,
-    pitch: 45,
+    pitch: 0,
     maxPitch: 80,
     attributionControl: true
   });
@@ -3827,7 +3827,7 @@
     { name: 'Tilt', pitch: 45, terrain: true },
     { name: '3D', pitch: 70, terrain: true }
   ];
-  let viewMode = 1; // default: Tilt
+  let viewMode = 0; // default: 2D
   const viewToggleGroup = document.getElementById('viewToggleGroup');
   const viewBtns = viewToggleGroup.querySelectorAll('button');
 
