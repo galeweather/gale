@@ -3202,7 +3202,7 @@
     const bounds = map.getBounds();
     const west = bounds.getWest(), east = bounds.getEast();
     const north = bounds.getNorth(), south = bounds.getSouth();
-    const COLS = 120, ROWS = 80;
+    const COLS = 60, ROWS = 40;
     const lngStep = (east - west) / COLS;
     const latStep = (north - south) / ROWS;
     const z = Math.min(Math.floor(map.getZoom()), 6);
@@ -3246,8 +3246,8 @@
       sampleCanvas.width = 256; sampleCanvas.height = 256;
       const sCtx = sampleCanvas.getContext('2d');
       const features = [];
-      const cellHalfLng = lngStep * 0.49;
-      const cellHalfLat = latStep * 0.49;
+      const cellHalfLng = lngStep * 0.65;
+      const cellHalfLat = latStep * 0.65;
       let lastKey = null;
 
       for (const cell of cells) {
@@ -3294,7 +3294,7 @@
             'fill-extrusion-color': ['get', 'color'],
             'fill-extrusion-height': ['get', 'height'],
             'fill-extrusion-base': ['get', 'base'],
-            'fill-extrusion-opacity': 0.6
+            'fill-extrusion-opacity': 0.25
           }
         });
       } else {
