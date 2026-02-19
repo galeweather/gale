@@ -3527,7 +3527,7 @@
     const CELL_DEG = Math.min(viewDeg, 0.025);
     const COLS = Math.ceil((east - west) / CELL_DEG);
     const ROWS = Math.ceil((north - south) / CELL_DEG);
-    const MAX_CELLS = 10000;
+    const MAX_CELLS = 6000; // lower cap since each cloud = 5 sphere slices
     if (COLS * ROWS > MAX_CELLS) return;
     const lngStep = CELL_DEG;
     const latStep = CELL_DEG;
@@ -3618,67 +3618,79 @@
         const dbz = Math.min(65, 10 + redDom * 45 + (maxC / 255) * 20);
 
         // ── Cloud type from dBZ (meteorological classification) ──
-        // 5-20 dBZ:  Stratus / nimbostratus — flat layer cloud
-        //            Base: 600-2000m AGL, Top: 2500-4500m AGL, thin
-        // 20-35 dBZ: Nimbostratus / cumulus congestus — thicker rain cloud
-        //            Base: 400-1500m AGL, Top: 4500-7500m AGL
-        // 35-50 dBZ: Cumulonimbus — tall convective tower
-        //            Base: 300-800m AGL, Top: 8000-12000m AGL
-        // 50+ dBZ:   Deep cumulonimbus — severe storm
-        //            Base: 200-500m AGL, Top: 11000-15000m AGL
+        // Base heights intentionally vary widely so clouds sit at different levels
         let baseH, topH;
         if (dbz < 20) {
-          // Stratus / light nimbostratus — flat, thin layer
-          baseH = 800 + rnd4 * 1200;   // 800-2000m
-          topH = baseH + 1500 + rnd1 * 1500; // 1.5-3km thick
+          // Stratus / nimbostratus — base 800-2500m, thin
+          baseH = 800 + rnd4 * 1700;
+          topH = baseH + 1500 + rnd1 * 1500;
         } else if (dbz < 35) {
-          // Nimbostratus — moderate depth rain cloud
-          baseH = 400 + rnd4 * 1000;   // 400-1400m
-          topH = baseH + 3000 + rnd1 * 2500; // 3-5.5km thick
+          // Nimbostratus — base 500-2000m, moderate
+          baseH = 500 + rnd4 * 1500;
+          topH = baseH + 3000 + rnd1 * 2500;
         } else if (dbz < 50) {
-          // Cumulonimbus — tall convective
-          baseH = 300 + rnd4 * 500;    // 300-800m
-          topH = baseH + 6000 + rnd1 * 4000; // 6-10km thick
+          // Cumulonimbus — base 400-1200m, tall
+          baseH = 400 + rnd4 * 800;
+          topH = baseH + 6000 + rnd1 * 4000;
         } else {
-          // Deep cumulonimbus — severe storm
-          baseH = 200 + rnd4 * 300;    // 200-500m
-          topH = baseH + 10000 + rnd1 * 4000; // 10-14km thick
+          // Deep cumulonimbus — base 300-700m, very tall
+          baseH = 300 + rnd4 * 400;
+          topH = baseH + 10000 + rnd1 * 4000;
         }
         baseH = Math.round(baseH);
         topH = Math.round(topH);
 
-        // Cloud color from dBZ:
-        // Low dBZ = bright white (wispy), high dBZ = dark gray-green (storm)
+        // Cloud color
         const stormFactor = Math.min(1, dbz / 55);
-        const L = Math.round(230 - stormFactor * 110); // 230 white → 120 dark
-        // Severe storms get slight green/yellow tint (like real storm clouds)
+        const L = Math.round(230 - stormFactor * 110);
         const Rclr = L, Gclr = L + (stormFactor > 0.6 ? 4 : 2), Bclr = L + 5;
         const color = `rgb(${Rclr}, ${Gclr}, ${Bclr})`;
 
-        // Size: heavier precip → slightly larger cloud footprint
+        // Size
         const sizeScale = 0.7 + stormFactor * 0.25 + rnd1 * 0.15;
-        const cellRLng = lngStep * 0.55 * sizeScale;
-        const cellRLat = latStep * 0.55 * sizeScale;
+        const maxRLng = lngStep * 0.45 * sizeScale;
+        const maxRLat = latStep * 0.45 * sizeScale;
 
-        // Slight jitter to break grid pattern
+        // Slight jitter
         const cLng = cell.lng + (rnd2 - 0.5) * lngStep * 0.2;
         const cLat = cell.lat + (rnd3 - 0.5) * latStep * 0.2;
 
-        // Clean elliptical shape with gentle variation
-        const coords = baseAngles.map((a, i) => {
-          const vHash = ((h + i * 2654435761) >>> 0) & 0xFF;
-          const wobble = 1.0 + (vHash / 255 - 0.5) * 0.12; // ±6% subtle
-          return [
-            cLng + Math.cos(a) * cellRLng * wobble,
-            cLat + Math.sin(a) * cellRLat * wobble * 0.9
-          ];
-        });
+        // ── Sphere approximation: 5 stacked slices ──
+        // Radius follows sin(π*f) — narrow at base/top, widest at equator
+        const SLICES = 5;
+        const thickness = topH - baseH;
+        for (let s = 0; s < SLICES; s++) {
+          const f0 = s / SLICES;       // fraction start (0-1)
+          const f1 = (s + 1) / SLICES; // fraction end
+          const fMid = (f0 + f1) / 2;  // midpoint for radius calc
+          const rFrac = Math.sin(fMid * Math.PI); // 0→1→0 sphere profile
+          const sliceRLng = maxRLng * rFrac;
+          const sliceRLat = maxRLat * rFrac;
+          if (sliceRLng < 0.001) continue; // skip nearly-zero slices
 
-        features.push({
-          type: 'Feature',
-          geometry: { type: 'Polygon', coordinates: [coords] },
-          properties: { color, height: topH, base: baseH }
-        });
+          const sliceBase = Math.round(baseH + f0 * thickness);
+          const sliceTop = Math.round(baseH + f1 * thickness);
+
+          const coords = baseAngles.map((a, i) => {
+            const vHash = ((h + i * 2654435761) >>> 0) & 0xFF;
+            const wobble = 1.0 + (vHash / 255 - 0.5) * 0.1;
+            return [
+              cLng + Math.cos(a) * sliceRLng * wobble,
+              cLat + Math.sin(a) * sliceRLat * wobble * 0.9
+            ];
+          });
+
+          // Slightly darker at bottom, brighter at top (natural cloud shading)
+          const shadeFactor = 0.85 + fMid * 0.15; // 0.85 at bottom → 1.0 at top
+          const sL = Math.round(L * shadeFactor);
+          const sColor = `rgb(${sL}, ${sL + (stormFactor > 0.6 ? 4 : 2)}, ${sL + 5})`;
+
+          features.push({
+            type: 'Feature',
+            geometry: { type: 'Polygon', coordinates: [coords] },
+            properties: { color: sColor, height: sliceTop, base: sliceBase }
+          });
+        }
       }
 
       const geojson = { type: 'FeatureCollection', features };
