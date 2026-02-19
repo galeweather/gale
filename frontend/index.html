@@ -1332,7 +1332,14 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
       <path d="M12 2.69l5.66 5.66a8 8 0 11-11.31 0z"/>
     </svg>
-    <span>Precip</span>
+    <span>Precipitation</span>
+  </button>
+
+  <button class="layer-btn active" id="elevRadarToggle" title="Elevated Radar (E)" aria-label="Toggle elevated radar" aria-pressed="true">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+      <path d="M3 17h18"/><path d="M5 13h14"/><circle cx="12" cy="8" r="4"/><path d="M8.5 6.5a5 5 0 010 3"/><path d="M15.5 6.5a5 5 0 000 3"/>
+    </svg>
+    <span>Elevation</span>
   </button>
 
   <button class="layer-btn" data-layer="satellite" title="Satellite" aria-label="Toggle satellite layer" aria-pressed="false">
@@ -1356,13 +1363,6 @@
     <button data-view="1" class="active" title="Tilted view with terrain">Tilt</button>
     <button data-view="2" title="Full 3D terrain view">3D</button>
   </div>
-
-  <button class="layer-btn active" id="elevRadarToggle" title="Elevated Radar (E)" aria-label="Toggle elevated radar" aria-pressed="true">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-      <path d="M3 17h18"/><path d="M5 13h14"/><circle cx="12" cy="8" r="4"/><path d="M8.5 6.5a5 5 0 010 3"/><path d="M15.5 6.5a5 5 0 000 3"/>
-    </svg>
-    <span>Elevation</span>
-  </button>
 
   <!-- Atmos & X-Sect hidden until atmosphere profile pipeline is fixed -->
   <button class="layer-btn" id="atmosToggle" title="Atmosphere Columns (A)" aria-label="Toggle atmosphere columns" aria-pressed="false" style="display:none;">
@@ -3551,10 +3551,15 @@
   function setViewMode(mode) {
     viewMode = mode;
     const v = VIEW_MODES[viewMode];
+    // Disable terrain first for 2D, enable first for 3D modes
+    if (!v.terrain) {
+      map.setTerrain(null);
+    } else {
+      try { map.setTerrain({ source: 'dem', exaggeration: 1.5 }); } catch(e) {}
+    }
     const opts = { pitch: v.pitch, duration: 600 };
     if (mode === 0) opts.bearing = 0; // reset north for top-down
     map.easeTo(opts);
-    map.setTerrain(v.terrain ? { source: 'dem', exaggeration: 1.5 } : null);
     viewBtns.forEach(b => b.classList.toggle('active', parseInt(b.dataset.view) === mode));
     announce(`${v.name} view`);
   }
