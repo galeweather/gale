@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Gale: HRRR Precipitation (APCP) → Hourly-rate Color-ramped Slippy Map tiles (f01-f12).
+"""Gale: HRRR Precipitation (APCP) → Hourly-rate Color-ramped Slippy Map tiles (f01-f18).
 
-Downloads HRRR APCP (accumulated precipitation) for f01 through f12, computes
+Downloads HRRR APCP (accumulated precipitation) for f01 through f18, computes
 hourly rates by subtracting adjacent hours (rate[N] = APCP[N] - APCP[N-1]),
 applies a color ramp, and generates PNG tiles at zoom 2-6.
 
 APCP at f00 is always zero (no time elapsed), so we start at f01.
 f01 = 0-1h accumulation (used directly as hourly rate).
-f02-f12 = subtracted from previous hour to get per-hour rate.
+f02-f18 = subtracted from previous hour to get per-hour rate.
 
 No pip dependencies — uses only stdlib + GDAL CLI tools.
 """
@@ -24,7 +24,7 @@ from urllib.error import URLError
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 RAMP_FILE = os.path.join(SCRIPT_DIR, "precip_ramp.txt")
 NOMADS_BASE = "https://nomads.ncep.noaa.gov/cgi-bin/filter_hrrr_2d.pl"
-MAX_FORECAST_HOUR = 12
+MAX_FORECAST_HOUR = 18
 
 
 def find_latest_hrrr_run():

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Gale: HRRR 2m Temperature → Color-ramped Slippy Map tiles (f00-f12).
+"""Gale: HRRR 2m Temperature → Color-ramped Slippy Map tiles (f00-f18).
 
-Downloads the latest HRRR analysis (f00) through 12-hour forecast (f12) for
+Downloads the latest HRRR analysis (f00) through 18-hour forecast (f18) for
 2m temperature from NOMADS, processes through GDAL to produce RGBA PNG tiles
 at zoom 2-6, and writes a metadata.json with generation info.
 
@@ -20,7 +20,7 @@ from urllib.error import URLError
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 RAMP_FILE = os.path.join(SCRIPT_DIR, "temperature_ramp.txt")
 NOMADS_BASE = "https://nomads.ncep.noaa.gov/cgi-bin/filter_hrrr_2d.pl"
-MAX_FORECAST_HOUR = 12
+MAX_FORECAST_HOUR = 18
 
 
 def find_latest_hrrr_run():

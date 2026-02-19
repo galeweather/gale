@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Gale: HRRR 10m Wind → Color-ramped Slippy Map tiles (f00-f12).
+"""Gale: HRRR 10m Wind → Color-ramped Slippy Map tiles (f00-f18).
 
 Downloads the latest HRRR for 10m UGRD and VGRD from NOMADS.
 - f00: Full product suite (speed, direction, U, V tiles)
-- f01-f12: Wind speed tiles only (forecast)
+- f01-f18: Wind speed tiles only (forecast)
 
 No pip dependencies — uses only stdlib + GDAL CLI tools.
 """
@@ -23,7 +23,7 @@ WDIR_RAMP_FILE = os.path.join(SCRIPT_DIR, "wind_direction_ramp.txt")
 U_RAMP_FILE = os.path.join(SCRIPT_DIR, "wind_u_ramp.txt")
 V_RAMP_FILE = os.path.join(SCRIPT_DIR, "wind_v_ramp.txt")
 NOMADS_BASE = "https://nomads.ncep.noaa.gov/cgi-bin/filter_hrrr_2d.pl"
-MAX_FORECAST_HOUR = 12
+MAX_FORECAST_HOUR = 18
 
 
 def find_latest_hrrr_run():

@@ -8,7 +8,7 @@ on:
 jobs:
   generate-tiles:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
 
     steps:
       - name: Checkout
@@ -37,7 +37,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
         run: |
-          for layer in temperature temperature-f01 temperature-f02 temperature-f03 temperature-f04 temperature-f05 temperature-f06 temperature-f07 temperature-f08 temperature-f09 temperature-f10 temperature-f11 temperature-f12 wind wind-f01 wind-f02 wind-f03 wind-f04 wind-f05 wind-f06 wind-f07 wind-f08 wind-f09 wind-f10 wind-f11 wind-f12 precipitation precipitation-f02 precipitation-f03 precipitation-f04 precipitation-f05 precipitation-f06 precipitation-f07 precipitation-f08 precipitation-f09 precipitation-f10 precipitation-f11 precipitation-f12 wind-direction wind-u wind-v; do
+          for layer in temperature temperature-f01 temperature-f02 temperature-f03 temperature-f04 temperature-f05 temperature-f06 temperature-f07 temperature-f08 temperature-f09 temperature-f10 temperature-f11 temperature-f12 temperature-f13 temperature-f14 temperature-f15 temperature-f16 temperature-f17 temperature-f18 wind wind-f01 wind-f02 wind-f03 wind-f04 wind-f05 wind-f06 wind-f07 wind-f08 wind-f09 wind-f10 wind-f11 wind-f12 wind-f13 wind-f14 wind-f15 wind-f16 wind-f17 wind-f18 precipitation precipitation-f02 precipitation-f03 precipitation-f04 precipitation-f05 precipitation-f06 precipitation-f07 precipitation-f08 precipitation-f09 precipitation-f10 precipitation-f11 precipitation-f12 precipitation-f13 precipitation-f14 precipitation-f15 precipitation-f16 precipitation-f17 precipitation-f18 wind-direction wind-u wind-v; do
             if [ ! -d "scripts/output/${layer}" ]; then
               echo "Skipping ${layer} — no output directory"
               continue

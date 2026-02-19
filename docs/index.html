@@ -1493,7 +1493,7 @@
     <div class="timeline-track">
       <div class="timeline-track-row">
         <div class="timeline-now-marker"></div>
-        <input class="timeline-slider-unified" type="range" min="0" max="82" value="10" id="timeSlider" aria-label="Timeline" aria-valuetext="Now">
+        <input class="timeline-slider-unified" type="range" min="0" max="118" value="10" id="timeSlider" aria-label="Timeline" aria-valuetext="Now">
         <div class="timeline-label" id="timeLabel">Now</div>
       </div>
       <div class="timeline-ticks" id="timelineTicks"></div>
@@ -1777,7 +1777,7 @@
   let currentTempF01LayerId = 'temperature-f01-layer';
   let hrrrSwapGen = 0;
   let forecastT = 0;  // legacy compat — use fcBlend for interpolation
-  let forecastHourFrac = 0;  // 0-12, fractional forecast hour
+  let forecastHourFrac = 0;  // 0-18, fractional forecast hour
   let fcLowerHour = 0;       // floor(forecastHourFrac) — lower tile set
   let fcUpperHour = 0;       // ceil(forecastHourFrac) — upper tile set
   let fcBlend = 0;           // 0-1 blend within current hour pair
@@ -2289,6 +2289,9 @@
         gl.disableVertexAttribArray(aIdx);
 
         // Pass 4: Composite onto MapLibre's framebuffer
+        // Fade particles out when zoomed out so radar is visible
+        const zoom = mapR.getZoom();
+        const zoomOpacity = Math.min(1.0, Math.max(0.15, (zoom - 2) / 5));
         gl.bindFramebuffer(gl.FRAMEBUFFER, prevFBO);
         gl.viewport(0, 0, cw, ch);
         gl.enable(gl.BLEND);
@@ -2296,7 +2299,7 @@
         gl.useProgram(scProg);
         glBind(gl, nxtS, 0);
         gl.uniform1i(gl.getUniformLocation(scProg, 'u_screen'), 0);
-        gl.uniform1f(gl.getUniformLocation(scProg, 'u_opacity'), 1.0);
+        gl.uniform1f(gl.getUniformLocation(scProg, 'u_opacity'), zoomOpacity);
         drawQuad(gl, scProg);
 
         sIdx = 1 - sIdx;
@@ -4304,7 +4307,7 @@
   });
 
   // ─── Unified Timeline ──────────────────────────
-  // Single slider: 0-10 = past radar (-50m to now), 10 = NOW, 11-82 = future forecast (+10m to +12h)
+  // Single slider: 0-10 = past radar (-50m to now), 10 = NOW, 11-118 = future forecast (+10m to +18h)
   const timeSlider = document.getElementById('timeSlider');
   const timeLabel = document.getElementById('timeLabel');
   const playBtn = document.getElementById('playBtn');
@@ -4345,7 +4348,7 @@
       const d = new Date(Date.now() + offsetMin * 60000);
       return `${formatTime(d)} (${offsetMin}m)`;
     }
-    // Future: val 11-82 → +10m to +720m (12h), each step = 10 min
+    // Future: val 11-118 → +10m to +1080m (18h), each step = 10 min
     const offsetMin = (val - 10) * 10;
     const d = new Date(Date.now() + offsetMin * 60000);
     if (offsetMin >= 60) {
@@ -4374,11 +4377,11 @@
       if (map.getLayer('radar-layer')) map.setPaintProperty('radar-layer', 'raster-opacity', 0.7);
       if (map.getLayer('precip-forecast-layer')) map.setPaintProperty('precip-forecast-layer', 'raster-opacity', 0);
     } else {
-      // Future forecast: slider 11-82 → 0 to 12 hours (each step = 10 min)
+      // Future forecast: slider 11-118 → 0 to 18 hours (each step = 10 min)
       forecastHourFrac = (val - 10) / 6; // 6 steps per hour
       forecastT = Math.min(forecastHourFrac, 1); // legacy compat (clamped 0-1)
-      const newLower = Math.min(11, Math.floor(forecastHourFrac));
-      const newUpper = Math.min(12, newLower + 1);
+      const newLower = Math.min(17, Math.floor(forecastHourFrac));
+      const newUpper = Math.min(18, newLower + 1);
       fcBlend = forecastHourFrac - newLower;
 
       // Swap tile sources if hour boundary crossed
@@ -4422,8 +4425,8 @@
   function updateTimelineTicks() {
     const now = new Date();
     const ticks = document.getElementById('timelineTicks');
-    // Tick positions: -50m, NOW, +4h, +8h, +12h
-    const offsets = [-50, 0, 240, 480, 720];
+    // Tick positions: -50m, NOW, +6h, +12h, +18h
+    const offsets = [-50, 0, 360, 720, 1080];
     const labels = offsets.map(off => {
       if (off === 0) return 'NOW';
       if (off > 0) {
@@ -4467,18 +4470,18 @@
           timeSlider.value = frame;
           timeSlider.dispatchEvent(new Event('input'));
           playInterval = setTimeout(playStep, 500);
-        } else if (frame <= 82) {
-          // Future forecast: jump by 3 (= 30 min per beat) through 12h
-          timeSlider.value = Math.min(frame, 82);
+        } else if (frame <= 118) {
+          // Future forecast: jump by 6 (= 1h per beat) through 18h
+          timeSlider.value = Math.min(frame, 118);
           timeSlider.dispatchEvent(new Event('input'));
-          frame += 2; // next iteration will be +3 total
-          playInterval = setTimeout(playStep, 500);
+          frame += 5; // next iteration will be +6 total
+          playInterval = setTimeout(playStep, 600);
         } else {
-          // Done — stop at end
-          playing = false;
-          playBtn.setAttribute('aria-pressed', 'false');
-          playBtn.setAttribute('aria-label', 'Play animation');
-          playBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>';
+          // Loop: restart from beginning
+          frame = -1; // will become 0 on next frame++
+          timeSlider.value = 0;
+          timeSlider.dispatchEvent(new Event('input'));
+          playInterval = setTimeout(playStep, 800);
         }
       }
       playInterval = setTimeout(playStep, 500);
