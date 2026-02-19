@@ -1987,9 +1987,13 @@
       vec2 uv = (pos - u_wind_min) / (u_wind_max - u_wind_min);
       vec2 wind = vec2(0.0);
       if (uv.x >= 0.0 && uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0) {
-        float u = texture2D(u_wind_u, uv).r * 80.0 - 40.0;
-        float v = texture2D(u_wind_v, uv).r * 80.0 - 40.0;
-        wind = vec2(u, -v);
+        vec4 uSamp = texture2D(u_wind_u, uv);
+        vec4 vSamp = texture2D(u_wind_v, uv);
+        if (uSamp.a > 0.1 && vSamp.a > 0.1) {
+          float u = uSamp.r * 80.0 - 40.0;
+          float v = vSamp.r * 80.0 - 40.0;
+          wind = vec2(u, -v);
+        }
       }
       float spd = length(wind);
       vec2 npos = pos + wind * u_speed_factor;
@@ -2023,9 +2027,13 @@
       vec2 wuv = (pos - u_wind_min) / (u_wind_max - u_wind_min);
       v_speed = 0.0;
       if (wuv.x >= 0.0 && wuv.x <= 1.0 && wuv.y >= 0.0 && wuv.y <= 1.0) {
-        float u = texture2D(u_wind_u, wuv).r * 80.0 - 40.0;
-        float v = texture2D(u_wind_v, wuv).r * 80.0 - 40.0;
-        v_speed = length(vec2(u, v));
+        vec4 uSamp = texture2D(u_wind_u, wuv);
+        vec4 vSamp = texture2D(u_wind_v, wuv);
+        if (uSamp.a > 0.1 && vSamp.a > 0.1) {
+          float u = uSamp.r * 80.0 - 40.0;
+          float v = vSamp.r * 80.0 - 40.0;
+          v_speed = length(vec2(u, v));
+        }
       }
       gl_Position = u_matrix * vec4(pos, 0.0, 1.0);
       gl_PointSize = clamp(1.0 + v_speed * 0.12, 1.0, 3.5);
@@ -4437,8 +4445,10 @@
   function updateRadarFrame(radarIdx) {
     if (!map.getSource('radar')) return;
     const product = radarProducts[radarIdx];
+    // Cache-bust with 2-min bucket so browser fetches fresh radar frames
+    const cb = Math.floor(Date.now() / 120000);
     map.getSource('radar').setTiles([
-      `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/${product}/{z}/{x}/{y}.png`
+      `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/${product}/{z}/{x}/{y}.png?_=${cb}`
     ]);
   }
 
