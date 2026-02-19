@@ -1907,9 +1907,9 @@
   }
 
   // ─── Wind Particle System (WebGL) ─────────────────
-  const PARTICLE_RES = window.innerWidth < 640 ? 128 : 256;
+  const PARTICLE_RES = window.innerWidth < 640 ? 128 : 512;
   const PARTICLE_COUNT = PARTICLE_RES * PARTICLE_RES;
-  const FADE_OPACITY = window.innerWidth < 640 ? 0.993 : 0.996;
+  const FADE_OPACITY = window.innerWidth < 640 ? 0.990 : 0.994;
   let windParticleLayer = null;
 
   function glShader(gl, type, src) {
@@ -2028,7 +2028,7 @@
         v_speed = length(vec2(u, v));
       }
       gl_Position = u_matrix * vec4(pos, 0.0, 1.0);
-      gl_PointSize = 1.0;
+      gl_PointSize = clamp(1.0 + v_speed * 0.12, 1.0, 3.5);
     }`;
 
   const W_DRAW_FS = `
@@ -2037,8 +2037,11 @@
     varying float v_speed;
     void main() {
       if (v_speed < 0.5) discard;
+      vec2 pc = gl_PointCoord - 0.5;
+      if (dot(pc, pc) > 0.25) discard;
       float t = clamp(v_speed / 40.0, 0.0, 1.0);
-      gl_FragColor = texture2D(u_color_ramp, vec2(t, 0.5));
+      vec4 c = texture2D(u_color_ramp, vec2(t, 0.5));
+      gl_FragColor = vec4(c.rgb * 1.3, c.a);
     }`;
 
   const W_SCREEN_FS = `
@@ -2229,9 +2232,9 @@
         gl.uniform1i(gl.getUniformLocation(upProg, 'u_wind_v'), 2);
         gl.uniform2f(gl.getUniformLocation(upProg, 'u_wind_min'), WB.x0, WB.y0);
         gl.uniform2f(gl.getUniformLocation(upProg, 'u_wind_max'), WB.x1, WB.y1);
-        gl.uniform1f(gl.getUniformLocation(upProg, 'u_speed_factor'), 0.000025);
+        gl.uniform1f(gl.getUniformLocation(upProg, 'u_speed_factor'), 0.00003);
         gl.uniform1f(gl.getUniformLocation(upProg, 'u_drop_rate'), 0.003);
-        gl.uniform1f(gl.getUniformLocation(upProg, 'u_drop_rate_bump'), 0.00015);
+        gl.uniform1f(gl.getUniformLocation(upProg, 'u_drop_rate_bump'), 0.0001);
         gl.uniform1f(gl.getUniformLocation(upProg, 'u_rand_seed'), Math.random());
 
         gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
