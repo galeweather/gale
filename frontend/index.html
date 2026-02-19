@@ -514,7 +514,7 @@
     -webkit-appearance: none;
     appearance: none;
     height: 4px;
-    background: linear-gradient(to right, rgba(56, 189, 248, 0.3) 0%, rgba(56, 189, 248, 0.5) 12.2%, rgba(255, 170, 56, 0.3) 12.2%, rgba(255, 170, 56, 0.3) 100%);
+    background: rgba(255, 255, 255, 0.15);
     border-radius: 2px;
     outline: none;
     cursor: pointer;
@@ -4392,13 +4392,16 @@
     }
   });
 
-  // Position now-marker to align with slider value 10 (Now)
+  // Position now-marker and update track gradient
   function positionNowMarker() {
     const marker = document.querySelector('.timeline-now-marker');
     if (!marker || !timeSlider.offsetWidth) return;
     const pct = 10 / (parseInt(timeSlider.max) - parseInt(timeSlider.min));
     const offset = 8 + pct * (timeSlider.offsetWidth - 16);
     marker.style.left = offset + 'px';
+    // Color track: blue past (left of NOW), dim future (right of NOW)
+    const nowPct = (offset / timeSlider.offsetWidth * 100).toFixed(1);
+    timeSlider.style.background = `linear-gradient(to right, rgba(56,189,248,0.35) 0%, rgba(56,189,248,0.5) ${nowPct}%, rgba(255,255,255,0.12) ${nowPct}%, rgba(255,255,255,0.12) 100%)`;
   }
 
   // Position label on load
@@ -4471,11 +4474,11 @@
           timeSlider.dispatchEvent(new Event('input'));
           playInterval = setTimeout(playStep, 500);
         } else if (frame <= 118) {
-          // Future forecast: jump by 6 (= 1h per beat) through 18h
+          // Future forecast: jump by 3 (= 30min per beat) through 18h
           timeSlider.value = Math.min(frame, 118);
           timeSlider.dispatchEvent(new Event('input'));
-          frame += 5; // next iteration will be +6 total
-          playInterval = setTimeout(playStep, 600);
+          frame += 2; // next iteration will be +3 total
+          playInterval = setTimeout(playStep, 800);
         } else {
           // Loop: restart from beginning
           frame = -1; // will become 0 on next frame++
