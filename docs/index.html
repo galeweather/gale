@@ -3208,7 +3208,7 @@
         'raster-fade-duration': 0
       },
       layout: { visibility: layers.temp ? 'visible' : 'none' }
-    }, 'radar-layer');
+    }, 'conus-mask-layer');
 
     currentTempSourceId = newSourceId;
     currentTempLayerId = newLayerId;
@@ -3236,7 +3236,7 @@
         'raster-fade-duration': 0
       },
       layout: { visibility: layers.temp ? 'visible' : 'none' }
-    }, 'radar-layer');
+    }, 'conus-mask-layer');
 
     currentTempF01SourceId = newF01SourceId;
     currentTempF01LayerId = newF01LayerId;
@@ -3463,12 +3463,12 @@
     south = Math.max(south, 22); north = Math.min(north, 52);
     if (west >= east || south >= north) return;
 
-    // Cell size: 0.2° max, shrinks proportionally when zoomed in
+    // Cell size: 0.05° max, shrinks proportionally when zoomed in
     const viewDeg = (east - west) / 60;
-    const CELL_DEG = Math.min(viewDeg, 0.2);
+    const CELL_DEG = Math.min(viewDeg, 0.05);
     const COLS = Math.ceil((east - west) / CELL_DEG);
     const ROWS = Math.ceil((north - south) / CELL_DEG);
-    const MAX_CELLS = 5000;
+    const MAX_CELLS = 10000;
     if (COLS * ROWS > MAX_CELLS) return; // too zoomed out, skip
     const lngStep = CELL_DEG;
     const latStep = CELL_DEG;
