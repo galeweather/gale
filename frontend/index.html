@@ -1785,6 +1785,9 @@
     if (fhour <= 1) return 'precipitation';
     return `precipitation-f${String(fhour).padStart(2, '0')}`;
   }
+  function windTilePath(fhour) {
+    return fhour === 0 ? 'wind' : `wind-f${String(fhour).padStart(2, '0')}`;
+  }
   function updateForecastSources() {
     const ts = Date.now();
     if (map.getSource(currentTempSourceId)) {
@@ -3087,10 +3090,10 @@
 
   function sampleTileAt(lng, lat, layerName) {
     const layerPath = layerName || 'temperature';
-    const converter = layerPath === 'wind' ? rgbToWindMph
-                    : layerPath === 'precipitation' ? rgbToPrecipIn
-                    : layerPath === 'wind-direction' ? rgbToWindDir
-                    : rgbToTempF;  // covers 'temperature' and 'temperature-f01'
+    const converter = layerPath.startsWith('wind-direction') ? rgbToWindDir
+                    : layerPath.startsWith('wind') ? rgbToWindMph
+                    : layerPath.startsWith('precipitation') ? rgbToPrecipIn
+                    : rgbToTempF;  // covers 'temperature' and 'temperature-f*'
 
     return new Promise((resolve) => {
       const z = Math.min(Math.floor(map.getZoom()), 6);
@@ -3192,7 +3195,7 @@
         const lat = south + row * latStep;
         promises.push(
           Promise.all([
-            sampleTileAt(lng, lat, 'wind'),
+            sampleTileAt(lng, lat, windTilePath(Math.round(forecastHourFrac))),
             sampleTileAt(lng, lat, 'wind-direction')
           ]).then(([mph, dir]) => {
             if (mph !== null && mph > 1) {
@@ -3232,8 +3235,8 @@
         const lat = south + row * latStep;
         promises.push(
           Promise.all([
-            sampleTileAt(lng, lat, 'precipitation'),
-            sampleTileAt(lng, lat, 'temperature')
+            sampleTileAt(lng, lat, precipTilePath(Math.max(1, Math.round(forecastHourFrac) || 1))),
+            sampleTileAt(lng, lat, tempTilePath(fcLowerHour))
           ]).then(([inches, tempF]) => {
             if (inches !== null && inches > 0) {
               const type = (tempF !== null && tempF <= 32) ? 'snow' : 'rain';
@@ -4069,7 +4072,7 @@
     const precipH = Math.max(1, Math.round(forecastHourFrac) || 1);
     const samples = [
       sampleTileAt(lng, lat, lowerTempPath),
-      sampleTileAt(lng, lat, 'wind'),
+      sampleTileAt(lng, lat, windTilePath(Math.round(forecastHourFrac))),
       sampleTileAt(lng, lat, precipTilePath(precipH))
     ];
     if (forecastHourFrac > 0) samples.push(sampleTileAt(lng, lat, upperTempPath));

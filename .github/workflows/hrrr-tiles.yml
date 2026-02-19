@@ -37,7 +37,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
         run: |
-          for layer in temperature temperature-f01 temperature-f02 temperature-f03 temperature-f04 temperature-f05 temperature-f06 temperature-f07 temperature-f08 temperature-f09 temperature-f10 temperature-f11 temperature-f12 wind precipitation precipitation-f02 precipitation-f03 precipitation-f04 precipitation-f05 precipitation-f06 precipitation-f07 precipitation-f08 precipitation-f09 precipitation-f10 precipitation-f11 precipitation-f12 wind-direction wind-u wind-v; do
+          for layer in temperature temperature-f01 temperature-f02 temperature-f03 temperature-f04 temperature-f05 temperature-f06 temperature-f07 temperature-f08 temperature-f09 temperature-f10 temperature-f11 temperature-f12 wind wind-f01 wind-f02 wind-f03 wind-f04 wind-f05 wind-f06 wind-f07 wind-f08 wind-f09 wind-f10 wind-f11 wind-f12 precipitation precipitation-f02 precipitation-f03 precipitation-f04 precipitation-f05 precipitation-f06 precipitation-f07 precipitation-f08 precipitation-f09 precipitation-f10 precipitation-f11 precipitation-f12 wind-direction wind-u wind-v; do
             if [ ! -d "scripts/output/${layer}" ]; then
               echo "Skipping ${layer} — no output directory"
               continue
@@ -53,12 +53,14 @@ jobs:
               --cache-control "public, max-age=3600" \
               --no-progress
 
-            # Upload metadata.json with 5-minute cache
-            aws s3 cp "scripts/output/${layer}/metadata.json" "s3://gale-tiles/${layer}/metadata.json" \
-              --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" \
-              --cache-control "public, max-age=300" \
-              --content-type "application/json" \
-              --no-progress
+            # Upload metadata.json with 5-minute cache (only base layers have it)
+            if [ -f "scripts/output/${layer}/metadata.json" ]; then
+              aws s3 cp "scripts/output/${layer}/metadata.json" "s3://gale-tiles/${layer}/metadata.json" \
+                --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" \
+                --cache-control "public, max-age=300" \
+                --content-type "application/json" \
+                --no-progress
+            fi
           done
 
           # Atmosphere profile: single binary file (not tiles)
