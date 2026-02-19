@@ -3435,10 +3435,10 @@
     if (west >= east || south >= north) return;
 
     // Fixed geographic cell size — clouds are always the same size
-    const CELL_DEG = 0.35;
+    const CELL_DEG = 0.2;
     const COLS = Math.ceil((east - west) / CELL_DEG);
     const ROWS = Math.ceil((north - south) / CELL_DEG);
-    const MAX_CELLS = 4000;
+    const MAX_CELLS = 5000;
     if (COLS * ROWS > MAX_CELLS) return; // too zoomed out, skip
     const lngStep = CELL_DEG;
     const latStep = CELL_DEG;
