@@ -3427,11 +3427,21 @@
     if (!elevatedRadarOn) return;
 
     const bounds = map.getBounds();
-    const west = bounds.getWest(), east = bounds.getEast();
-    const north = bounds.getNorth(), south = bounds.getSouth();
-    const COLS = 60, ROWS = 40;
-    const lngStep = (east - west) / COLS;
-    const latStep = (north - south) / ROWS;
+    let west = bounds.getWest(), east = bounds.getEast();
+    let north = bounds.getNorth(), south = bounds.getSouth();
+    // Clamp to CONUS to avoid sampling empty ocean tiles
+    west = Math.max(west, -130); east = Math.min(east, -65);
+    south = Math.max(south, 22); north = Math.min(north, 52);
+    if (west >= east || south >= north) return;
+
+    // Fixed geographic cell size — clouds are always the same size
+    const CELL_DEG = 0.35;
+    const COLS = Math.ceil((east - west) / CELL_DEG);
+    const ROWS = Math.ceil((north - south) / CELL_DEG);
+    const MAX_CELLS = 4000;
+    if (COLS * ROWS > MAX_CELLS) return; // too zoomed out, skip
+    const lngStep = CELL_DEG;
+    const latStep = CELL_DEG;
     const z = Math.min(Math.floor(map.getZoom()), 6);
     if (z < 2) return;
 
@@ -3444,10 +3454,12 @@
     const tilePromises = new Map();
     const cells = [];
 
-    for (let row = 0; row < ROWS; row++) {
-      for (let col = 0; col < COLS; col++) {
-        const lng = west + (col + 0.5) * lngStep;
-        const lat = south + (row + 0.5) * latStep;
+    // Snap grid to fixed geographic positions so cells don't shift on pan
+    const startLng = Math.floor(west / CELL_DEG) * CELL_DEG + CELL_DEG / 2;
+    const startLat = Math.floor(south / CELL_DEG) * CELL_DEG + CELL_DEG / 2;
+
+    for (let lat = startLat; lat < north; lat += latStep) {
+      for (let lng = startLng; lng < east; lng += lngStep) {
         const tile = lngLatToTile(lng, lat, z);
         const pixel = lngLatToPixelInTile(lng, lat, z, tile.x, tile.y);
         const tileKey = `${z}/${tile.x}/${tile.y}`;
