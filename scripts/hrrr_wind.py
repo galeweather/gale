@@ -113,12 +113,14 @@ def main():
     download(vgrd_url, VGRD_GRIB, "VGRD (v-component)")
 
     # Step 1: Reproject each component to EPSG:4326, clipped to CONUS
+    # -dstnodata ensures pixels outside HRRR grid become NODATA → transparent
     run_cmd([
         "gdalwarp",
         "-t_srs", "EPSG:4326",
         "-te", "-130", "20", "-60", "55",
         "-ts", "3600", "1400",
         "-r", "bilinear",
+        "-dstnodata", "-9999",
         "-of", "GTiff",
         UGRD_GRIB, UGRD_TIF
     ], "UGRD GRIB2 → GeoTIFF (EPSG:4326)")
@@ -129,6 +131,7 @@ def main():
         "-te", "-130", "20", "-60", "55",
         "-ts", "3600", "1400",
         "-r", "bilinear",
+        "-dstnodata", "-9999",
         "-of", "GTiff",
         VGRD_GRIB, VGRD_TIF
     ], "VGRD GRIB2 → GeoTIFF (EPSG:4326)")

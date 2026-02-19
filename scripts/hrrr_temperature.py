@@ -105,12 +105,14 @@ def process_forecast_hour(date_str, hour_str, fhour, output_dir):
     download(url, grib_file)
 
     # Reproject GRIB2 → EPSG:4326 GeoTIFF, clipped to CONUS
+    # -dstnodata ensures pixels outside HRRR grid become NODATA → transparent
     run_cmd([
         "gdalwarp",
         "-t_srs", "EPSG:4326",
         "-te", "-130", "20", "-60", "55",
         "-ts", "3600", "1400",
         "-r", "bilinear",
+        "-dstnodata", "-9999",
         "-of", "GTiff",
         grib_file, tiff_file
     ], f"{tag}: GRIB2 → GeoTIFF (EPSG:4326)")
