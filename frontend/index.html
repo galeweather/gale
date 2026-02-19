@@ -2672,7 +2672,7 @@
         'text-field': '\u2193',
         'text-size': 18,
         'text-font': ['Noto Sans Bold'],
-        'text-rotation-alignment': 'map',
+        'text-rotation-alignment': 'viewport',
         'text-rotate': ['get', 'direction'],
         'text-allow-overlap': true,
         'text-ignore-placement': true,
@@ -3602,7 +3602,6 @@
     if (elevatedRadarOn) {
       updateElevatedRadar();
     } else {
-      if (map.getLayer('radar-3d-layer')) map.setLayoutProperty('radar-3d-layer', 'visibility', 'none');
       if (map.getLayer('cloud-halo-layer')) map.setLayoutProperty('cloud-halo-layer', 'visibility', 'none');
     }
     announce(`Elevated radar ${elevatedRadarOn ? 'on' : 'off'}`);
@@ -3672,15 +3671,14 @@
       const sc = document.createElement('canvas');
       sc.width = 256; sc.height = 256;
       const sx = sc.getContext('2d');
-      const coreFeatures = [];  // bright inner cloud mass
-      const haloFeatures = [];  // faded outer edge (fake transparency)
+      const cloudFeatures = [];
       let lastKey = null;
 
-      // Background color for blending halos toward (dark theme bg)
+      // Background color for blending clouds toward (dark theme bg)
       const BG_R = 10, BG_G = 14, BG_B = 23; // --bg-base: #0a0e17
 
-      // 24-vertex circle template for organic shapes
-      const CPT = 24;
+      // 32-vertex circle for smooth puffy shapes
+      const CPT = 32;
       const angles = [];
       for (let i = 0; i <= CPT; i++) angles.push((i / CPT) * Math.PI * 2);
 
@@ -3730,66 +3728,45 @@
         deckBase = Math.round(deckBase);
         const deckTop = Math.round(deckBase + deckThick);
 
-        // ── Cloud color: tint with radar color beneath ──
-        // Use the actual radar pixel color, lightened for cloud appearance
-        const lightBlend = 0.35; // 35% toward white for soft cloud look
+        // ── Cloud color: tint with radar color, blend toward dark bg ──
+        const lightBlend = 0.25; // lighten radar color slightly
         const cR = Math.round(R * (1 - lightBlend) + 255 * lightBlend);
         const cG = Math.round(G * (1 - lightBlend) + 255 * lightBlend);
         const cB = Math.round(B * (1 - lightBlend) + 255 * lightBlend);
-        const coreColor = `rgb(${cR}, ${cG}, ${cB})`;
-
-        // Halo color: blend toward background for soft edges
-        const haloBlend = 0.6;
-        const hR = Math.round(cR * (1 - haloBlend) + BG_R * haloBlend);
-        const hG = Math.round(cG * (1 - haloBlend) + BG_G * haloBlend);
-        const hB = Math.round(cB * (1 - haloBlend) + BG_B * haloBlend);
-        const haloColor = `rgb(${hR}, ${hG}, ${hB})`;
+        // Blend toward background for soft muted appearance
+        const bgBlend = 0.45;
+        const fR = Math.round(cR * (1 - bgBlend) + BG_R * bgBlend);
+        const fG = Math.round(cG * (1 - bgBlend) + BG_G * bgBlend);
+        const fB = Math.round(cB * (1 - bgBlend) + BG_B * bgBlend);
+        const cloudColor = `rgb(${fR}, ${fG}, ${fB})`;
 
         // ── Geometry: position + jitter ──
         const cLng = cell.lng + (rnd2 - 0.5) * CELL_DEG * 0.35;
         const cLat = cell.lat + (rnd3 - 0.5) * CELL_DEG * 0.35;
 
-        // Halo ring: large, heavily overlapping (70-90% of cell)
-        const haloRLng = CELL_DEG * (0.70 + rnd1 * 0.20);
-        const haloRLat = CELL_DEG * (0.70 + rnd1 * 0.20);
+        // Cloud radius: large, heavily overlapping (70-90% of cell)
+        const cloudRLng = CELL_DEG * (0.70 + rnd1 * 0.20);
+        const cloudRLat = CELL_DEG * (0.70 + rnd1 * 0.20);
 
-        // Core disc: 55-65% of halo size
-        const coreFrac = 0.55 + rnd4 * 0.10;
-        const coreRLng = haloRLng * coreFrac;
-        const coreRLat = haloRLat * coreFrac;
-
-        // Generate wobbled circle coords
-        function makeCloud(rLng, rLat, wobbleAmt) {
-          return angles.map((a, i) => {
-            const vh = ((h + i * 2654435761) >>> 0) & 0xFF;
-            const w = 1.0 + (vh / 255 - 0.5) * wobbleAmt;
-            return [cLng + Math.cos(a) * rLng * w, cLat + Math.sin(a) * rLat * w];
-          });
-        }
-
-        // Halo: strong wobble (±30%) for ragged, natural cloud edges
-        const haloCoords = makeCloud(haloRLng, haloRLat, 0.6);
-        haloFeatures.push({
-          type: 'Feature',
-          geometry: { type: 'Polygon', coordinates: [haloCoords] },
-          properties: { color: haloColor, height: deckTop - 50, base: deckBase + 50 }
+        // Generate gently wobbled circle for puffy cloud shape
+        const coords = angles.map((a, i) => {
+          const vh = ((h + i * 2654435761) >>> 0) & 0xFF;
+          const w = 1.0 + (vh / 255 - 0.5) * 0.15; // ±7.5% wobble — smooth, puffy
+          return [cLng + Math.cos(a) * cloudRLng * w, cLat + Math.sin(a) * cloudRLat * w];
         });
 
-        // Core: moderate wobble (±15%), slightly taller than halo
-        const coreCoords = makeCloud(coreRLng, coreRLat, 0.3);
-        coreFeatures.push({
+        cloudFeatures.push({
           type: 'Feature',
-          geometry: { type: 'Polygon', coordinates: [coreCoords] },
-          properties: { color: coreColor, height: deckTop, base: deckBase }
+          geometry: { type: 'Polygon', coordinates: [coords] },
+          properties: { color: cloudColor, height: deckTop, base: deckBase }
         });
       }
 
-      // ── Two layers: faded halo underneath, bright core on top ──
-      const haloGJ = { type: 'FeatureCollection', features: haloFeatures };
-      const coreGJ = { type: 'FeatureCollection', features: coreFeatures };
+      // ── Single uniform cloud layer ──
+      const cloudGJ = { type: 'FeatureCollection', features: cloudFeatures };
 
       if (!map.getSource('cloud-halo')) {
-        map.addSource('cloud-halo', { type: 'geojson', data: haloGJ });
+        map.addSource('cloud-halo', { type: 'geojson', data: cloudGJ });
         map.addLayer({
           id: 'cloud-halo-layer',
           type: 'fill-extrusion',
@@ -3801,23 +3778,9 @@
             'fill-extrusion-opacity': 0.35
           }
         });
-        map.addSource('radar-3d', { type: 'geojson', data: coreGJ });
-        map.addLayer({
-          id: 'radar-3d-layer',
-          type: 'fill-extrusion',
-          source: 'radar-3d',
-          paint: {
-            'fill-extrusion-color': ['get', 'color'],
-            'fill-extrusion-height': ['get', 'height'],
-            'fill-extrusion-base': ['get', 'base'],
-            'fill-extrusion-opacity': 0.4
-          }
-        });
       } else {
-        map.getSource('cloud-halo').setData(haloGJ);
+        map.getSource('cloud-halo').setData(cloudGJ);
         map.setLayoutProperty('cloud-halo-layer', 'visibility', 'visible');
-        map.getSource('radar-3d').setData(coreGJ);
-        map.setLayoutProperty('radar-3d-layer', 'visibility', 'visible');
       }
     });
   }
