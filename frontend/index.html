@@ -2527,21 +2527,21 @@
 
     // Label stem icon — vertical line with dot at bottom for 3D label pins
     (() => {
-      const w = 4, h = 40;
+      const w = 6, h = 48;
       const c = document.createElement('canvas');
       c.width = w; c.height = h;
       const ctx = c.getContext('2d');
-      // Vertical line
-      ctx.strokeStyle = 'rgba(148, 163, 184, 0.5)';
-      ctx.lineWidth = 1;
+      // Vertical line from top to near bottom
+      ctx.strokeStyle = 'rgba(148, 163, 184, 0.6)';
+      ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.moveTo(w / 2, 0);
-      ctx.lineTo(w / 2, h - 4);
+      ctx.lineTo(w / 2, h - 5);
       ctx.stroke();
-      // Small dot at bottom
-      ctx.fillStyle = 'rgba(148, 163, 184, 0.6)';
+      // Small dot at bottom (ground anchor)
+      ctx.fillStyle = 'rgba(148, 163, 184, 0.8)';
       ctx.beginPath();
-      ctx.arc(w / 2, h - 2, 2, 0, Math.PI * 2);
+      ctx.arc(w / 2, h - 3, 2.5, 0, Math.PI * 2);
       ctx.fill();
       map.addImage('label-stem', { width: w, height: h, data: ctx.getImageData(0, 0, w, h).data });
     })();
@@ -2640,10 +2640,11 @@
         'text-pitch-alignment': 'viewport',
         'text-rotation-alignment': 'viewport',
         'icon-image': 'label-stem',
-        'icon-anchor': 'top',
-        'icon-size': 0.6,
+        'icon-anchor': 'bottom',
+        'icon-size': 0.7,
+        'icon-pitch-alignment': 'viewport',
         'text-anchor': 'bottom',
-        'text-offset': [0, -0.8]
+        'text-offset': [0, -2.5]
       },
       paint: {
         'text-color': '#e2e8f0',
@@ -2654,7 +2655,7 @@
         ],
         'icon-opacity': [
           'interpolate', ['linear'], ['zoom'],
-          3, 0, 4, 0.5
+          3, 0, 4, 0.6
         ]
       }
     });
@@ -2679,10 +2680,11 @@
         'text-pitch-alignment': 'viewport',
         'text-rotation-alignment': 'viewport',
         'icon-image': 'label-stem',
-        'icon-anchor': 'top',
-        'icon-size': 0.5,
+        'icon-anchor': 'bottom',
+        'icon-size': 0.6,
+        'icon-pitch-alignment': 'viewport',
         'text-anchor': 'bottom',
-        'text-offset': [0, -0.6]
+        'text-offset': [0, -2.2]
       },
       paint: {
         'text-color': '#e2e8f0',
@@ -2715,10 +2717,11 @@
         'text-pitch-alignment': 'viewport',
         'text-rotation-alignment': 'viewport',
         'icon-image': 'label-stem',
-        'icon-anchor': 'top',
-        'icon-size': 0.4,
+        'icon-anchor': 'bottom',
+        'icon-size': 0.5,
+        'icon-pitch-alignment': 'viewport',
         'text-anchor': 'bottom',
-        'text-offset': [0, -0.5]
+        'text-offset': [0, -2.0]
       },
       paint: {
         'text-color': '#cbd5e1',
