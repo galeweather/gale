@@ -3884,9 +3884,9 @@
       applyForecastInterpolation();
       updateTempLabels();
       // Keep radar dimmed as context, overlay HRRR precip forecast on top
-      const fadeT = Math.min((val - 10) / 10, 1); // 0→1 over slider 11-20
-      if (map.getLayer('radar-layer')) map.setPaintProperty('radar-layer', 'raster-opacity', 0.7 * (1 - fadeT * 0.6)); // dims to 0.28, never fully hidden
-      if (map.getLayer('precip-forecast-layer')) map.setPaintProperty('precip-forecast-layer', 'raster-opacity', 0.5 * fadeT);
+      const fadeT = Math.min((val - 10) / 5, 1); // 0→1 over slider 11-15 (fast fade)
+      if (map.getLayer('radar-layer')) map.setPaintProperty('radar-layer', 'raster-opacity', 0.7 * (1 - fadeT * 0.5)); // dims to 0.35
+      if (map.getLayer('precip-forecast-layer')) map.setPaintProperty('precip-forecast-layer', 'raster-opacity', 0.7 * fadeT); // full visible
     }
     timeLabel.textContent = getTimelineLabel(val);
     timeSlider.setAttribute('aria-valuetext', val === 10 ? 'Now' : val < 10 ? `${(10 - val) * 5} minutes ago` : `+${val - 10} minutes`);
@@ -3943,9 +3943,7 @@
     playBtn.setAttribute('aria-label', playing ? 'Pause animation' : 'Play animation');
     if (playing) {
       playBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="3" width="4" height="18"/><rect x="15" y="3" width="4" height="18"/></svg>';
-      let frame = 0;
-      timeSlider.value = frame;
-      timeSlider.dispatchEvent(new Event('input'));
+      let frame = parseInt(timeSlider.value); // start from current position
 
       function playStep() {
         frame++;
