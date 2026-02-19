@@ -2621,12 +2621,11 @@
       source: 'temp-labels',
       layout: {
         'text-field': ['get', 'label'],
-        'text-size': 15,
+        'text-size': 14,
         'text-font': ['Noto Sans Bold'],
         'text-allow-overlap': true,
         'text-ignore-placement': true,
-        'text-offset': [0, -1.0],
-        'text-padding': 0
+        'text-padding': 4
       },
       paint: {
         'text-color': '#f59e0b',
@@ -2651,12 +2650,11 @@
       source: 'wind-labels',
       layout: {
         'text-field': ['get', 'label'],
-        'text-size': 15,
+        'text-size': 14,
         'text-font': ['Noto Sans Bold'],
         'text-allow-overlap': true,
         'text-ignore-placement': true,
-        'text-offset': [0, 0.5],
-        'text-padding': 0
+        'text-padding': 4
       },
       paint: {
         'text-color': '#38bdf8',
@@ -2672,14 +2670,14 @@
       source: 'wind-labels',
       layout: {
         'text-field': '\u2193',
-        'text-size': 18,
+        'text-size': 28,
         'text-font': ['Noto Sans Bold'],
         'text-rotation-alignment': 'viewport',
         'text-rotate': ['get', 'direction'],
         'text-allow-overlap': true,
         'text-ignore-placement': true,
-        'text-offset': [0, -0.3],
-        'text-padding': 0
+        'text-offset': [0, -1.2],
+        'text-padding': 4
       },
       paint: {
         'text-color': '#38bdf8',
@@ -3132,36 +3130,47 @@
   async function updateTempLabels() {
     if (!layers.temp) return;
     const gen = ++tempLabelGen;
-    const center = map.getCenter();
-    const lng = center.lng, lat = center.lat;
-    const features = [];
+    const bounds = map.getBounds();
+    const west = bounds.getWest(), east = bounds.getEast();
+    const north = bounds.getNorth(), south = bounds.getSouth();
+    const cols = 5, rows = 4;
+    const lngStep = (east - west) / cols;
+    const latStep = (north - south) / rows;
 
-    if (forecastHourFrac > 0) {
-      const [fLow, fHigh] = await Promise.all([
-        sampleTileAt(lng, lat, tempTilePath(fcLowerHour)),
-        sampleTileAt(lng, lat, tempTilePath(fcUpperHour))
-      ]);
-      if (gen !== tempLabelGen) return;
-      if (fLow !== null) {
-        const val = fHigh !== null ? Math.round(fLow * (1 - fcBlend) + fHigh * fcBlend) : fLow;
-        features.push({
-          type: 'Feature',
-          geometry: { type: 'Point', coordinates: [lng, lat] },
-          properties: { label: `${val}°F` }
-        });
-      }
-    } else {
-      const tempF = await sampleTileAt(lng, lat, 'temperature');
-      if (gen !== tempLabelGen) return;
-      if (tempF !== null) {
-        features.push({
-          type: 'Feature',
-          geometry: { type: 'Point', coordinates: [lng, lat] },
-          properties: { label: `${tempF}°F` }
-        });
+    const features = [];
+    const promises = [];
+    for (let row = 0.5; row <= rows; row++) {
+      for (let col = 0.5; col <= cols; col++) {
+        const lng = west + col * lngStep;
+        const lat = south + row * latStep;
+        const samplePromise = forecastHourFrac > 0
+          ? Promise.all([
+              sampleTileAt(lng, lat, tempTilePath(fcLowerHour)),
+              sampleTileAt(lng, lat, tempTilePath(fcUpperHour))
+            ]).then(([fLow, fHigh]) => {
+              if (fLow !== null) {
+                const val = fHigh !== null ? Math.round(fLow * (1 - fcBlend) + fHigh * fcBlend) : fLow;
+                features.push({
+                  type: 'Feature',
+                  geometry: { type: 'Point', coordinates: [lng, lat] },
+                  properties: { label: `${val}°F` }
+                });
+              }
+            })
+          : sampleTileAt(lng, lat, 'temperature').then(tempF => {
+              if (tempF !== null) {
+                features.push({
+                  type: 'Feature',
+                  geometry: { type: 'Point', coordinates: [lng, lat] },
+                  properties: { label: `${tempF}°F` }
+                });
+              }
+            });
+        promises.push(samplePromise);
       }
     }
-
+    await Promise.all(promises);
+    if (gen !== tempLabelGen) return;
     if (map.getSource('temp-labels')) {
       map.getSource('temp-labels').setData({ type: 'FeatureCollection', features });
     }
@@ -3171,23 +3180,37 @@
   async function updateWindLabels() {
     if (!layers.wind) return;
     const gen = ++windLabelGen;
-    const center = map.getCenter();
-    const lng = center.lng, lat = center.lat;
+    const bounds = map.getBounds();
+    const west = bounds.getWest(), east = bounds.getEast();
+    const north = bounds.getNorth(), south = bounds.getSouth();
+    const cols = 4, rows = 3;
+    const lngStep = (east - west) / cols;
+    const latStep = (north - south) / rows;
+
     const features = [];
-
-    const [mph, dir] = await Promise.all([
-      sampleTileAt(lng, lat, windTilePath(Math.round(forecastHourFrac))),
-      sampleTileAt(lng, lat, 'wind-direction')
-    ]);
-    if (gen !== windLabelGen) return;
-    if (mph !== null) {
-      features.push({
-        type: 'Feature',
-        geometry: { type: 'Point', coordinates: [lng, lat] },
-        properties: { label: `${mph} mph`, direction: dir ?? 0 }
-      });
+    const promises = [];
+    for (let row = 0.5; row <= rows; row++) {
+      for (let col = 0.5; col <= cols; col++) {
+        const lng = west + col * lngStep;
+        const lat = south + row * latStep;
+        promises.push(
+          Promise.all([
+            sampleTileAt(lng, lat, windTilePath(Math.round(forecastHourFrac))),
+            sampleTileAt(lng, lat, 'wind-direction')
+          ]).then(([mph, dir]) => {
+            if (mph !== null && mph > 1) {
+              features.push({
+                type: 'Feature',
+                geometry: { type: 'Point', coordinates: [lng, lat] },
+                properties: { label: `${mph} mph`, direction: dir ?? 0 }
+              });
+            }
+          })
+        );
+      }
     }
-
+    await Promise.all(promises);
+    if (gen !== windLabelGen) return;
     if (map.getSource('wind-labels')) {
       map.getSource('wind-labels').setData({ type: 'FeatureCollection', features });
     }
