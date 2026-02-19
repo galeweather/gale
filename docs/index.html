@@ -1893,6 +1893,7 @@
     uniform sampler2D u_color_ramp;
     varying float v_speed;
     void main() {
+      if (v_speed < 0.5) discard;
       float t = clamp(v_speed / 40.0, 0.0, 1.0);
       gl_FragColor = texture2D(u_color_ramp, vec2(t, 0.5));
     }`;
@@ -3541,6 +3542,11 @@
         const d = sCtx.getImageData(px, py, 1, 1).data;
         if (d[3] < 30) continue;
 
+        // Intensity: brighter pixels = heavier precip = taller clouds
+        const intensity = (d[0] + d[1] + d[2]) / (255 * 3); // 0-1
+        const baseH = 10000;
+        const topH = baseH + 2000 + intensity * 10000; // 12k light → 22k heavy
+
         // Circle polygon
         const coords = circleAngles.map(([cx, cy]) => [
           cell.lng + cx * cellRLng,
@@ -3555,8 +3561,8 @@
           },
           properties: {
             color: `rgb(${d[0]}, ${d[1]}, ${d[2]})`,
-            height: 12000,
-            base: 10000
+            height: topH,
+            base: baseH
           }
         });
       }
