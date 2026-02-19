@@ -2929,6 +2929,135 @@
     });
   });
 
+  // ─── Elevated Radar (120x80 fill-extrusion at cloud altitude) ──────
+  let elevatedRadarOn = false;
+  let elevRadarTimer = null;
+
+  function toggleElevatedRadar() {
+    elevatedRadarOn = !elevatedRadarOn;
+    if (elevatedRadarOn) {
+      updateElevatedRadar();
+    } else if (map.getLayer('radar-3d-layer')) {
+      map.setLayoutProperty('radar-3d-layer', 'visibility', 'none');
+    }
+    announce(`Elevated radar ${elevatedRadarOn ? 'on' : 'off'}`);
+  }
+
+  function updateElevatedRadar() {
+    if (!elevatedRadarOn) return;
+
+    const bounds = map.getBounds();
+    const west = bounds.getWest(), east = bounds.getEast();
+    const north = bounds.getNorth(), south = bounds.getSouth();
+    const COLS = 120, ROWS = 80;
+    const lngStep = (east - west) / COLS;
+    const latStep = (north - south) / ROWS;
+    const z = Math.min(Math.floor(map.getZoom()), 6);
+    if (z < 2) return;
+
+    // Get current radar product from timeline
+    const sliderVal = parseInt(timeSlider.value);
+    const radarIdx = sliderVal <= 10 ? sliderToRadarIdx(sliderVal) : 0;
+    const product = radarProducts[radarIdx];
+
+    // Collect unique tiles needed
+    const tilePromises = new Map();
+    const cells = [];
+
+    for (let row = 0; row < ROWS; row++) {
+      for (let col = 0; col < COLS; col++) {
+        const lng = west + (col + 0.5) * lngStep;
+        const lat = south + (row + 0.5) * latStep;
+        const tile = lngLatToTile(lng, lat, z);
+        const pixel = lngLatToPixelInTile(lng, lat, z, tile.x, tile.y);
+        const tileKey = `${z}/${tile.x}/${tile.y}`;
+        cells.push({ lng, lat, tileKey, px: pixel.px, py: pixel.py });
+
+        if (!tilePromises.has(tileKey)) {
+          const url = `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/${product}/${z}/${tile.x}/${tile.y}.png`;
+          tilePromises.set(tileKey, new Promise(resolve => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => resolve(img);
+            img.onerror = () => resolve(null);
+            img.src = url;
+          }));
+        }
+      }
+    }
+
+    Promise.all([...tilePromises.entries()].map(([key, p]) => p.then(img => [key, img]))).then(results => {
+      if (!elevatedRadarOn) return; // toggled off while loading
+      const tileImages = new Map(results);
+      const sampleCanvas = document.createElement('canvas');
+      sampleCanvas.width = 256; sampleCanvas.height = 256;
+      const sCtx = sampleCanvas.getContext('2d');
+      const features = [];
+      const cellHalfLng = lngStep * 0.49;
+      const cellHalfLat = latStep * 0.49;
+      let lastKey = null;
+
+      for (const cell of cells) {
+        const img = tileImages.get(cell.tileKey);
+        if (!img) continue;
+        if (cell.tileKey !== lastKey) {
+          sCtx.clearRect(0, 0, 256, 256);
+          sCtx.drawImage(img, 0, 0);
+          lastKey = cell.tileKey;
+        }
+        const px = Math.max(0, Math.min(255, Math.round(cell.px)));
+        const py = Math.max(0, Math.min(255, Math.round(cell.py)));
+        const d = sCtx.getImageData(px, py, 1, 1).data;
+        if (d[3] < 30) continue;
+
+        features.push({
+          type: 'Feature',
+          geometry: {
+            type: 'Polygon',
+            coordinates: [[
+              [cell.lng - cellHalfLng, cell.lat - cellHalfLat],
+              [cell.lng + cellHalfLng, cell.lat - cellHalfLat],
+              [cell.lng + cellHalfLng, cell.lat + cellHalfLat],
+              [cell.lng - cellHalfLng, cell.lat + cellHalfLat],
+              [cell.lng - cellHalfLng, cell.lat - cellHalfLat]
+            ]]
+          },
+          properties: {
+            color: `rgb(${d[0]}, ${d[1]}, ${d[2]})`,
+            height: 5000,
+            base: 4000
+          }
+        });
+      }
+
+      const geojson = { type: 'FeatureCollection', features };
+      if (!map.getSource('radar-3d')) {
+        map.addSource('radar-3d', { type: 'geojson', data: geojson });
+        map.addLayer({
+          id: 'radar-3d-layer',
+          type: 'fill-extrusion',
+          source: 'radar-3d',
+          paint: {
+            'fill-extrusion-color': ['get', 'color'],
+            'fill-extrusion-height': ['get', 'height'],
+            'fill-extrusion-base': ['get', 'base'],
+            'fill-extrusion-opacity': 0.6
+          }
+        });
+      } else {
+        map.getSource('radar-3d').setData(geojson);
+        map.setLayoutProperty('radar-3d-layer', 'visibility', 'visible');
+      }
+    });
+  }
+
+  // Debounced update on map move and timeline change
+  map.on('moveend', () => {
+    if (!elevatedRadarOn) return;
+    clearTimeout(elevRadarTimer);
+    elevRadarTimer = setTimeout(updateElevatedRadar, 300);
+  });
+
   // ─── 3D / 2D View Toggle ──────────────────────
   let is3D = true;
   const viewToggle = document.getElementById('viewToggle');
@@ -3223,6 +3352,11 @@
     timeLabel.textContent = getTimelineLabel(val);
     timeSlider.setAttribute('aria-valuetext', val === 10 ? 'Now' : val < 10 ? `${(10 - val) * 5} minutes ago` : `+${val - 10} minutes`);
     positionTimeLabel();
+    // Update elevated radar on frame change
+    if (elevatedRadarOn && val <= 10) {
+      clearTimeout(elevRadarTimer);
+      elevRadarTimer = setTimeout(updateElevatedRadar, 200);
+    }
   });
 
   // Position label on load
@@ -3865,6 +3999,7 @@
       case 'v': toggleView(); break;
       case 'x': toggleXsectionMode(); break;
       case 'a': toggleAtmosColumns(); break;
+      case 'e': toggleElevatedRadar(); break;
     }
   });
 
