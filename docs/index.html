@@ -2217,6 +2217,34 @@
       layout: { visibility: layers.temp ? 'visible' : 'none' }
     });
 
+    // CONUS mask — dark fill covering everything outside HRRR data bounds
+    // Hides red nodata pixels bleeding from edge tiles
+    map.addSource('conus-mask', {
+      type: 'geojson',
+      data: {
+        type: 'Feature',
+        geometry: {
+          type: 'Polygon',
+          coordinates: [
+            // Outer ring: covers the whole world
+            [[-180, -85], [180, -85], [180, 85], [-180, 85], [-180, -85]],
+            // Inner ring (hole): CONUS data area — slightly inside actual bounds
+            [[-125, 24.5], [-66.5, 24.5], [-66.5, 49.5], [-125, 49.5], [-125, 24.5]]
+          ]
+        }
+      }
+    });
+
+    map.addLayer({
+      id: 'conus-mask-layer',
+      type: 'fill',
+      source: 'conus-mask',
+      paint: {
+        'fill-color': '#0a0e17',
+        'fill-opacity': 1
+      }
+    });
+
     // MRMS Radar — Iowa State Mesonet (renders on top of temperature/wind/precip)
     map.addSource('radar', {
       type: 'raster',
@@ -3434,8 +3462,9 @@
     south = Math.max(south, 22); north = Math.min(north, 52);
     if (west >= east || south >= north) return;
 
-    // Fixed geographic cell size — clouds are always the same size
-    const CELL_DEG = 0.2;
+    // Cell size: 0.2° max, shrinks proportionally when zoomed in
+    const viewDeg = (east - west) / 60;
+    const CELL_DEG = Math.min(viewDeg, 0.2);
     const COLS = Math.ceil((east - west) / CELL_DEG);
     const ROWS = Math.ceil((north - south) / CELL_DEG);
     const MAX_CELLS = 5000;
