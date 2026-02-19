@@ -2079,7 +2079,8 @@
       type: 'raster',
       tiles: [`${TILE_BASE}/temperature/{z}/{x}/{y}.png`],
       tileSize: 256,
-      maxzoom: 6
+      maxzoom: 6,
+      bounds: [-134, 21, -61, 53]
     });
 
     map.addLayer({
@@ -2097,7 +2098,8 @@
       type: 'raster',
       tiles: [`${TILE_BASE}/temperature-f01/{z}/{x}/{y}.png`],
       tileSize: 256,
-      maxzoom: 6
+      maxzoom: 6,
+      bounds: [-134, 21, -61, 53]
     });
 
     map.addLayer({
@@ -2136,7 +2138,8 @@
       type: 'raster',
       tiles: [`${TILE_BASE}/precipitation/{z}/{x}/{y}.png`],
       tileSize: 256,
-      maxzoom: 6
+      maxzoom: 6,
+      bounds: [-134, 21, -61, 53]
     });
 
     map.addLayer({
@@ -2919,7 +2922,8 @@
       type: 'raster',
       tiles: [`${TILE_BASE}/temperature/{z}/{x}/{y}.png?_=${ts}`],
       tileSize: 256,
-      maxzoom: 6
+      maxzoom: 6,
+      bounds: [-134, 21, -61, 53]
     });
 
     map.addLayer({
@@ -2946,7 +2950,8 @@
       type: 'raster',
       tiles: [`${TILE_BASE}/temperature-f01/{z}/{x}/{y}.png?_=${ts}`],
       tileSize: 256,
-      maxzoom: 6
+      maxzoom: 6,
+      bounds: [-134, 21, -61, 53]
     });
 
     map.addLayer({
