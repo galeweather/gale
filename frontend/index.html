@@ -2791,9 +2791,20 @@
         'text-padding': 4
       },
       paint: {
-        'text-color': '#f59e0b',
-        'text-halo-color': 'rgba(0, 0, 0, 0.8)',
-        'text-halo-width': 1.5
+        'text-color': [
+          'interpolate', ['linear'], ['get', 'temp'],
+          -20, '#2563eb',
+           0,  '#3b82f6',
+          15,  '#06b6d4',
+          32,  '#10b981',
+          50,  '#84cc16',
+          65,  '#eab308',
+          80,  '#f97316',
+          95,  '#ef4444',
+          110, '#991b1b'
+        ],
+        'text-halo-color': 'rgba(0, 0, 0, 0.85)',
+        'text-halo-width': 2
       }
     });
 
@@ -3317,7 +3328,7 @@
                 features.push({
                   type: 'Feature',
                   geometry: { type: 'Point', coordinates: [lng, lat] },
-                  properties: { label: `${val}°F` }
+                  properties: { label: `${val}°F`, temp: val }
                 });
               }
             })
@@ -3326,7 +3337,7 @@
                 features.push({
                   type: 'Feature',
                   geometry: { type: 'Point', coordinates: [lng, lat] },
-                  properties: { label: `${tempF}°F` }
+                  properties: { label: `${tempF}°F`, temp: tempF }
                 });
               }
             });
