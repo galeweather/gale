@@ -432,25 +432,19 @@
     position: relative;
   }
 
-  .timeline-past {
-    flex: 0 0 48%;
-    position: relative;
-    display: flex;
-    align-items: center;
-  }
-
-  .timeline-slider {
+  .timeline-slider-unified {
     width: 100%;
     -webkit-appearance: none;
     appearance: none;
     height: 4px;
-    background: rgba(56, 189, 248, 0.3);
+    background: linear-gradient(to right, rgba(56, 189, 248, 0.3) 0%, rgba(56, 189, 248, 0.5) 14.3%, rgba(255, 170, 56, 0.3) 14.3%, rgba(255, 170, 56, 0.3) 100%);
     border-radius: 2px;
     outline: none;
     cursor: pointer;
+    position: relative;
   }
 
-  .timeline-slider::-webkit-slider-thumb {
+  .timeline-slider-unified::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
     width: 16px;
@@ -462,63 +456,21 @@
     transition: transform 0.15s ease;
   }
 
-  .timeline-slider::-webkit-slider-thumb:hover {
+  .timeline-slider-unified::-webkit-slider-thumb:hover {
     transform: scale(1.3);
   }
 
-  .timeline-now {
-    flex-shrink: 0;
+  .timeline-now-marker {
+    position: absolute;
+    left: 14.3%;
+    top: 50%;
+    transform: translate(-50%, -50%);
     width: 2px;
-    height: 20px;
+    height: 16px;
     background: var(--accent);
     box-shadow: 0 0 8px rgba(56, 189, 248, 0.5);
-    position: relative;
-  }
-
-  .timeline-future {
-    flex: 0 0 48%;
-    position: relative;
-    display: flex;
-    align-items: center;
-  }
-
-  .timeline-slider-future {
-    width: 100%;
-    -webkit-appearance: none;
-    appearance: none;
-    height: 4px;
-    background: rgba(255, 170, 56, 0.3);
-    border-radius: 2px;
-    outline: none;
-    cursor: pointer;
-  }
-
-  .timeline-slider-future::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    background: #ffaa38;
-    box-shadow: 0 0 10px rgba(255, 170, 56, 0.4);
-    cursor: grab;
-    transition: transform 0.15s ease;
-  }
-
-  .timeline-slider-future::-webkit-slider-thumb:hover {
-    transform: scale(1.3);
-  }
-
-  .timeline-future-label {
-    position: absolute;
-    top: -16px;
-    right: 0;
-    font-family: var(--mono);
-    font-size: 9px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: #ffaa38;
-    white-space: nowrap;
+    pointer-events: none;
+    z-index: 1;
   }
 
   .timeline-ticks {
@@ -541,7 +493,8 @@
   }
 
   .timeline-tick.future {
-    opacity: 0.3;
+    color: #ffaa38;
+    opacity: 0.5;
   }
 
   .timeline-play {
@@ -1016,7 +969,7 @@
     border-color: var(--accent);
     box-shadow: 0 0 0 3px var(--accent-dim);
   }
-  .timeline-slider:focus-visible {
+  .timeline-slider-unified:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 4px;
   }
@@ -1237,15 +1190,9 @@
     </button>
     <div class="timeline-track">
       <div class="timeline-track-row">
-        <div class="timeline-past">
-          <input class="timeline-slider" type="range" min="0" max="10" value="10" id="timeSlider" aria-label="Radar timeline" aria-valuetext="Now">
-          <div class="timeline-label" id="timeLabel">Now</div>
-        </div>
-        <div class="timeline-now"></div>
-        <div class="timeline-future">
-          <input class="timeline-slider-future" type="range" min="0" max="60" value="0" id="futureSlider" aria-label="Forecast timeline" aria-valuetext="Now">
-          <span class="timeline-future-label" id="futureLabel">Now</span>
-        </div>
+        <div class="timeline-now-marker"></div>
+        <input class="timeline-slider-unified" type="range" min="0" max="70" value="10" id="timeSlider" aria-label="Timeline" aria-valuetext="Now">
+        <div class="timeline-label" id="timeLabel">Now</div>
       </div>
       <div class="timeline-ticks">
         <span class="timeline-tick">-50m</span>
@@ -1370,7 +1317,8 @@
     zoom: 6,
     maxZoom: 12,
     minZoom: 2,
-    pitch: 45,
+    pitch: 60,
+    maxPitch: 80,
     attributionControl: true
   });
 
@@ -1885,6 +1833,15 @@
 
   // ─── Add Map Layers (order matters: bottom → top) ───
   map.on('load', () => {
+    // 3D Terrain — DEM tiles for real elevation
+    map.addSource('dem', {
+      type: 'raster-dem',
+      tiles: ['https://demotiles.maplibre.org/terrain-tiles/{z}/{x}/{y}.png'],
+      tileSize: 256,
+      maxzoom: 12
+    });
+    map.setTerrain({ source: 'dem', exaggeration: 1.5 });
+
     // Temperature color wash — HRRR tiles from R2 (renders below radar)
     map.addSource('temperature-tiles', {
       type: 'raster',
@@ -2817,10 +2774,8 @@
 
   // ─── Layer Toggle ───────────────────────────
   function updateLayerVisibility() {
-    // Radar + satellite: raster visibility
-    if (map.getLayer('radar-layer')) {
-      map.setLayoutProperty('radar-layer', 'visibility', layers.radar ? 'visible' : 'none');
-    }
+    // Radar: use elevated 3D in 3D mode, flat raster in 2D
+    updateElevatedRadar();
     if (map.getLayer('satellite-layer')) {
       map.setLayoutProperty('satellite-layer', 'visibility', layers.satellite ? 'visible' : 'none');
     }
@@ -2952,13 +2907,148 @@
     });
   });
 
+  // ─── Elevated Radar (3D fill-extrusion at cloud altitude) ──────
+  let radarElevTimer = null;
+
+  function updateElevatedRadar() {
+    if (!is3D || !layers.radar) {
+      // Hide 3D radar, show flat
+      if (map.getLayer('radar-3d-layer')) {
+        map.setLayoutProperty('radar-3d-layer', 'visibility', 'none');
+      }
+      if (map.getLayer('radar-layer')) {
+        map.setLayoutProperty('radar-layer', 'visibility', layers.radar ? 'visible' : 'none');
+      }
+      return;
+    }
+
+    // 3D + radar on: hide flat raster, build elevated layer
+    if (map.getLayer('radar-layer')) {
+      map.setLayoutProperty('radar-layer', 'visibility', 'none');
+    }
+
+    const bounds = map.getBounds();
+    const west = bounds.getWest(), east = bounds.getEast();
+    const north = bounds.getNorth(), south = bounds.getSouth();
+    const COLS = 20, ROWS = 15;
+    const lngStep = (east - west) / COLS;
+    const latStep = (north - south) / ROWS;
+    const z = Math.min(Math.floor(map.getZoom()), 6);
+    if (z < 2) return;
+
+    // Get current radar product
+    const sliderVal = parseInt(timeSlider.value);
+    const radarIdx = sliderVal <= 10 ? sliderToRadarIdx(sliderVal) : 0;
+    const product = radarProducts[radarIdx];
+
+    // Collect unique tiles needed
+    const tilePromises = new Map();
+    const cells = [];
+
+    for (let row = 0; row < ROWS; row++) {
+      for (let col = 0; col < COLS; col++) {
+        const lng = west + (col + 0.5) * lngStep;
+        const lat = south + (row + 0.5) * latStep;
+        const tile = lngLatToTile(lng, lat, z);
+        const pixel = lngLatToPixelInTile(lng, lat, z, tile.x, tile.y);
+        const tileKey = `${z}/${tile.x}/${tile.y}`;
+        cells.push({ lng, lat, tileKey, px: pixel.px, py: pixel.py });
+
+        if (!tilePromises.has(tileKey)) {
+          const url = `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/${product}/${z}/${tile.x}/${tile.y}.png`;
+          tilePromises.set(tileKey, new Promise(resolve => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => resolve(img);
+            img.onerror = () => resolve(null);
+            img.src = url;
+          }));
+        }
+      }
+    }
+
+    // Sample all tiles and build features
+    Promise.all([...tilePromises.entries()].map(([key, p]) => p.then(img => [key, img]))).then(results => {
+      const tileImages = new Map(results);
+      const sampleCanvas = document.createElement('canvas');
+      sampleCanvas.width = 256; sampleCanvas.height = 256;
+      const sCtx = sampleCanvas.getContext('2d');
+      const features = [];
+      const cellHalfLng = lngStep * 0.48;
+      const cellHalfLat = latStep * 0.48;
+      let lastKey = null;
+
+      for (const cell of cells) {
+        const img = tileImages.get(cell.tileKey);
+        if (!img) continue;
+        if (cell.tileKey !== lastKey) {
+          sCtx.clearRect(0, 0, 256, 256);
+          sCtx.drawImage(img, 0, 0);
+          lastKey = cell.tileKey;
+        }
+        const px = Math.max(0, Math.min(255, Math.round(cell.px)));
+        const py = Math.max(0, Math.min(255, Math.round(cell.py)));
+        const d = sCtx.getImageData(px, py, 1, 1).data;
+        if (d[3] < 30) continue; // transparent = no precip
+
+        features.push({
+          type: 'Feature',
+          geometry: {
+            type: 'Polygon',
+            coordinates: [[
+              [cell.lng - cellHalfLng, cell.lat - cellHalfLat],
+              [cell.lng + cellHalfLng, cell.lat - cellHalfLat],
+              [cell.lng + cellHalfLng, cell.lat + cellHalfLat],
+              [cell.lng - cellHalfLng, cell.lat + cellHalfLat],
+              [cell.lng - cellHalfLng, cell.lat - cellHalfLat]
+            ]]
+          },
+          properties: {
+            color: `rgb(${d[0]}, ${d[1]}, ${d[2]})`,
+            height: 4500,
+            base: 3500
+          }
+        });
+      }
+
+      const geojson = { type: 'FeatureCollection', features };
+      if (!map.getSource('radar-3d')) {
+        map.addSource('radar-3d', { type: 'geojson', data: geojson });
+        map.addLayer({
+          id: 'radar-3d-layer',
+          type: 'fill-extrusion',
+          source: 'radar-3d',
+          paint: {
+            'fill-extrusion-color': ['get', 'color'],
+            'fill-extrusion-height': ['get', 'height'],
+            'fill-extrusion-base': ['get', 'base'],
+            'fill-extrusion-opacity': 0.5
+          }
+        });
+      } else {
+        map.getSource('radar-3d').setData(geojson);
+        map.setLayoutProperty('radar-3d-layer', 'visibility', 'visible');
+      }
+    });
+  }
+
+  // Debounced elevated radar update on map move
+  map.on('moveend', () => {
+    if (!is3D || !layers.radar) return;
+    clearTimeout(radarElevTimer);
+    radarElevTimer = setTimeout(updateElevatedRadar, 300);
+  });
+
   // ─── 3D / 2D View Toggle ──────────────────────
   let is3D = true;
   const viewToggle = document.getElementById('viewToggle');
 
   function toggleView() {
     is3D = !is3D;
-    map.easeTo({ pitch: is3D ? 45 : 0, duration: 600 });
+    map.easeTo({ pitch: is3D ? 60 : 0, duration: 600 });
+    map.setTerrain(is3D ? { source: 'dem', exaggeration: 1.5 } : null);
+    // Toggle elevated radar
+    updateElevatedRadar();
     viewToggle.classList.toggle('active', is3D);
     viewToggle.querySelector('span').textContent = is3D ? '3D' : '2D';
     viewToggle.setAttribute('aria-pressed', String(is3D));
@@ -3180,8 +3270,8 @@
     drawer.setAttribute('aria-hidden', 'true');
   });
 
-  // ─── Timeline (radar animation frames) ──────
-  // Slider: 0 = oldest (-50 min), 10 = now. Left-to-right = past-to-present.
+  // ─── Unified Timeline ──────────────────────────
+  // Single slider: 0-10 = past radar (-50m to now), 10 = NOW, 11-70 = future forecast (+1m to +60m)
   const timeSlider = document.getElementById('timeSlider');
   const timeLabel = document.getElementById('timeLabel');
   const playBtn = document.getElementById('playBtn');
@@ -3215,28 +3305,39 @@
     timeLabel.style.left = thumbOffset + 'px';
   }
 
+  function getTimelineLabel(val) {
+    if (val < 10) return `-${(10 - val) * 5}m`;
+    if (val === 10) return 'Now';
+    return `+${val - 10}m`;
+  }
+
   timeSlider.addEventListener('input', () => {
-    const sliderVal = parseInt(timeSlider.value);
-    updateRadarFrame(sliderToRadarIdx(sliderVal));
+    const val = parseInt(timeSlider.value);
+    if (val <= 10) {
+      // Past radar frames: slider 0 = -50m (oldest), 10 = now
+      updateRadarFrame(sliderToRadarIdx(val));
+      forecastT = 0;
+      applyForecastInterpolation();
+    } else {
+      // Future forecast: slider 11-70 → forecastT 1/60 to 1.0
+      updateRadarFrame(0); // show live radar
+      forecastT = (val - 10) / 60;
+      applyForecastInterpolation();
+      updateTempLabels();
+    }
+    timeLabel.textContent = getTimelineLabel(val);
+    timeSlider.setAttribute('aria-valuetext', val === 10 ? 'Now' : val < 10 ? `${(10 - val) * 5} minutes ago` : `+${val - 10} minutes`);
     positionTimeLabel();
+    // Update elevated radar when frame changes
+    if (is3D && layers.radar && val <= 10) {
+      clearTimeout(radarElevTimer);
+      radarElevTimer = setTimeout(updateElevatedRadar, 200);
+    }
   });
 
   // Position label on load
   setTimeout(positionTimeLabel, 100);
   window.addEventListener('resize', positionTimeLabel);
-
-  // ─── Future Slider (f00 → f01 interpolation) ──────
-  const futureSlider = document.getElementById('futureSlider');
-  const futureLabel = document.getElementById('futureLabel');
-
-  futureSlider.addEventListener('input', () => {
-    const minutes = parseInt(futureSlider.value);
-    forecastT = minutes / 60;
-    futureLabel.textContent = minutes === 0 ? 'Now' : `+${minutes}m`;
-    futureSlider.setAttribute('aria-valuetext', minutes === 0 ? 'Now' : `+${minutes} minutes`);
-    applyForecastInterpolation();
-    updateTempLabels();
-  });
 
   function updateRadarFrame(radarIdx) {
     if (!map.getSource('radar')) return;
@@ -3244,14 +3345,6 @@
     map.getSource('radar').setTiles([
       `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/${product}/{z}/{x}/{y}.png`
     ]);
-    if (radarIdx === 0) {
-      timeLabel.textContent = 'Now';
-      timeSlider.setAttribute('aria-valuetext', 'Now');
-    } else {
-      const text = `${radarIdx * 5} minutes ago`;
-      timeLabel.textContent = `-${radarIdx * 5} min`;
-      timeSlider.setAttribute('aria-valuetext', text);
-    }
   }
 
   playBtn.addEventListener('click', () => {
@@ -3260,22 +3353,31 @@
     playBtn.setAttribute('aria-label', playing ? 'Pause radar animation' : 'Play radar animation');
     if (playing) {
       playBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="3" width="4" height="18"/><rect x="15" y="3" width="4" height="18"/></svg>';
-      // Reset future slider when playing radar animation
-      futureSlider.value = 0;
+      // Reset to past, clear any future interpolation
       forecastT = 0;
-      futureLabel.textContent = 'Now';
-      futureSlider.setAttribute('aria-valuetext', 'Now');
       applyForecastInterpolation();
       // Start from oldest (left), play right toward now
       let frame = 0;
       timeSlider.value = frame;
       updateRadarFrame(sliderToRadarIdx(frame));
+      timeLabel.textContent = getTimelineLabel(frame);
+      positionTimeLabel();
 
       playInterval = setInterval(() => {
         frame++;
-        if (frame > radarProducts.length - 1) frame = 0;
+        if (frame > 10) {
+          // Stop at NOW
+          frame = 10;
+          playing = false;
+          playBtn.setAttribute('aria-pressed', 'false');
+          playBtn.setAttribute('aria-label', 'Play radar animation');
+          playBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>';
+          clearInterval(playInterval);
+        }
         timeSlider.value = frame;
         updateRadarFrame(sliderToRadarIdx(frame));
+        timeLabel.textContent = getTimelineLabel(frame);
+        positionTimeLabel();
       }, 500);
     } else {
       playBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>';
@@ -3845,6 +3947,8 @@
   // ─── Load Atmosphere on Startup ────────────
   map.on('load', () => {
     loadAtmosphereProfile();
+    // Initial elevated radar update (delayed for tiles to load)
+    setTimeout(updateElevatedRadar, 2000);
   });
 
   // ─── Keyboard Shortcuts ─────────────────────
