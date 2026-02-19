@@ -1279,6 +1279,13 @@
     <span style="font-size:11px;font-weight:600;margin-left:4px">My Location</span>
   </button>
 
+  <button class="locate-inline visible" id="resetViewBtn" title="Reset view" aria-label="Reset map to default view">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
+    </svg>
+    <span style="font-size:11px;font-weight:600;margin-left:4px">Reset</span>
+  </button>
+
   <div class="search-container" id="searchContainer">
     <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/>
@@ -4226,6 +4233,12 @@
   }
 
   locateBtn.addEventListener('click', doLocate);
+
+  document.getElementById('resetViewBtn').addEventListener('click', () => {
+    map.flyTo({ center: [-94.3, 46.3], zoom: 6, pitch: 45, bearing: 0, duration: 1500 });
+    closeSearch();
+    clearClickMarker();
+  });
 
   // ─── Forecast Drawer Tabs ────────────────────
   document.querySelectorAll('.forecast-tab').forEach(tab => {
