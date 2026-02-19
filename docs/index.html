@@ -551,16 +551,19 @@
   }
 
   .timeline-ticks {
-    display: flex;
-    justify-content: space-between;
+    position: relative;
+    height: 14px;
     padding: 0 2px;
   }
 
   .timeline-tick {
+    position: absolute;
+    transform: translateX(-50%);
     font-family: var(--mono);
     font-size: 9px;
     color: var(--text-muted);
     opacity: 0.6;
+    white-space: nowrap;
   }
 
   .timeline-tick.now {
@@ -1694,38 +1697,8 @@
 (function() {
   'use strict';
 
-  // ─── HRRR Tile Protocol — strips red NODATA pixels ──────────────
-  // HRRR tiles have bright red/magenta NODATA outside the Lambert grid.
-  // This protocol loads tiles, scans pixels, and makes NODATA transparent.
-  // The temperature ramp alpha is 200 for data pixels; NODATA pixels from
-  // gdalwarp have alpha ~200 but very red hue. We detect them by checking
-  // if red channel dominates green+blue significantly.
-  maplibregl.addProtocol('hrrr', (params, callback) => {
-    const url = params.url.replace('hrrr://', 'https://');
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      const c = document.createElement('canvas');
-      c.width = img.width; c.height = img.height;
-      const ctx = c.getContext('2d');
-      ctx.drawImage(img, 0, 0);
-      const id = ctx.getImageData(0, 0, c.width, c.height);
-      const d = id.data;
-      for (let i = 0; i < d.length; i += 4) {
-        // NODATA: very red (R high, G+B low). Ramp data always has alpha=200.
-        // NODATA from gdalwarp mapped through color relief: R>180, G<80, B<80
-        if (d[i] > 150 && d[i+1] < 80 && d[i+2] < 80) {
-          d[i+3] = 0; // make transparent
-        }
-      }
-      ctx.putImageData(id, 0, 0);
-      c.toBlob(blob => {
-        blob.arrayBuffer().then(buf => callback(null, buf, null, null));
-      });
-    };
-    img.onerror = () => callback(new Error('Tile load failed'));
-    img.src = url;
-  });
+  // HRRR NODATA pixels (red fringe at CONUS edges) are hidden by CONUS mask layers.
+  // No custom tile protocol needed — tiles loaded directly via HTTPS.
 
   // ─── Map Setup ──────────────────────────────
   const map = new maplibregl.Map({
@@ -1767,8 +1740,6 @@
 
   // ─── Tile Base URL (Cloudflare R2) ────────────
   const TILE_BASE = 'https://pub-9975b1cfcbf9480f9e1333c7e208a6ce.r2.dev';
-  // HRRR tiles use custom protocol to strip red NODATA pixels
-  const HRRR_BASE = 'hrrr://pub-9975b1cfcbf9480f9e1333c7e208a6ce.r2.dev';
 
   // ─── HRRR Crossfade State ───────────────────
   let currentTempSourceId = 'temperature-tiles';
@@ -1796,19 +1767,19 @@
     const ts = Date.now();
     if (map.getSource(currentTempSourceId)) {
       map.getSource(currentTempSourceId).setTiles([
-        `${HRRR_BASE}/${tempTilePath(fcLowerHour)}/{z}/{x}/{y}.png?_=${ts}`
+        `${TILE_BASE}/${tempTilePath(fcLowerHour)}/{z}/{x}/{y}.png?_=${ts}`
       ]);
     }
     if (map.getSource(currentTempF01SourceId)) {
       map.getSource(currentTempF01SourceId).setTiles([
-        `${HRRR_BASE}/${tempTilePath(fcUpperHour)}/{z}/{x}/{y}.png?_=${ts}`
+        `${TILE_BASE}/${tempTilePath(fcUpperHour)}/{z}/{x}/{y}.png?_=${ts}`
       ]);
     }
     // Swap precip source to nearest forecast hour
     const precipH = Math.max(1, Math.round(forecastHourFrac) || 1);
     if (map.getSource('precip-forecast')) {
       map.getSource('precip-forecast').setTiles([
-        `${HRRR_BASE}/${precipTilePath(precipH)}/{z}/{x}/{y}.png?_=${ts}`
+        `${TILE_BASE}/${precipTilePath(precipH)}/{z}/{x}/{y}.png?_=${ts}`
       ]);
     }
   }
@@ -2336,10 +2307,10 @@
     });
     map.setTerrain({ source: 'dem', exaggeration: 1.5 });
 
-    // Temperature color wash — HRRR tiles via custom protocol (strips red NODATA)
+    // Temperature color wash — HRRR tiles from R2 (CONUS mask hides NODATA edges)
     map.addSource('temperature-tiles', {
       type: 'raster',
-      tiles: [`${HRRR_BASE}/temperature/{z}/{x}/{y}.png`],
+      tiles: [`${TILE_BASE}/temperature/{z}/{x}/{y}.png`],
       tileSize: 256,
       maxzoom: 6,
       bounds: [-126, 24, -66, 50]
@@ -2358,7 +2329,7 @@
     // Temperature +1h forecast overlay (f01, starts hidden at opacity 0)
     map.addSource('temperature-f01-tiles', {
       type: 'raster',
-      tiles: [`${HRRR_BASE}/temperature-f01/{z}/{x}/{y}.png`],
+      tiles: [`${TILE_BASE}/temperature-f01/{z}/{x}/{y}.png`],
       tileSize: 256,
       maxzoom: 6,
       bounds: [-126, 24, -66, 50]
@@ -2378,7 +2349,7 @@
     // HRRR Precipitation forecast overlay (futurecast radar)
     map.addSource('precip-forecast', {
       type: 'raster',
-      tiles: [`${HRRR_BASE}/precipitation/{z}/{x}/{y}.png`],
+      tiles: [`${TILE_BASE}/precipitation/{z}/{x}/{y}.png`],
       tileSize: 256,
       maxzoom: 6,
       bounds: [-126, 24, -66, 50]
@@ -3540,7 +3511,7 @@
 
     map.addSource(newSourceId, {
       type: 'raster',
-      tiles: [`${HRRR_BASE}/${tempTilePath(fcLowerHour)}/{z}/{x}/{y}.png?_=${ts}`],
+      tiles: [`${TILE_BASE}/${tempTilePath(fcLowerHour)}/{z}/{x}/{y}.png?_=${ts}`],
       tileSize: 256,
       maxzoom: 6,
       bounds: [-126, 24, -66, 50]
@@ -3568,7 +3539,7 @@
 
     map.addSource(newF01SourceId, {
       type: 'raster',
-      tiles: [`${HRRR_BASE}/${tempTilePath(fcUpperHour)}/{z}/{x}/{y}.png?_=${ts}`],
+      tiles: [`${TILE_BASE}/${tempTilePath(fcUpperHour)}/{z}/{x}/{y}.png?_=${ts}`],
       tileSize: 256,
       maxzoom: 6,
       bounds: [-126, 24, -66, 50]
@@ -4431,8 +4402,9 @@
   }
 
   // Position label on load
-  setTimeout(() => { positionTimeLabel(); positionNowMarker(); }, 100);
-  window.addEventListener('resize', () => { positionTimeLabel(); positionNowMarker(); });
+  function positionTimeline() { positionTimeLabel(); positionNowMarker(); updateTimelineTicks(); }
+  setTimeout(positionTimeline, 100);
+  window.addEventListener('resize', positionTimeline);
 
   // Dynamic timeline ticks with real times
   function formatTime(date) {
@@ -4445,20 +4417,28 @@
   function updateTimelineTicks() {
     const now = new Date();
     const ticks = document.getElementById('timelineTicks');
-    // Tick positions: -50m, NOW, +6h, +12h, +18h
-    const offsets = [-50, 0, 360, 720, 1080];
-    const labels = offsets.map(off => {
-      if (off === 0) return 'NOW';
-      if (off > 0) {
-        const d = new Date(now.getTime() + off * 60000);
-        return `+${off / 60}h`;
-      }
-      const d = new Date(now.getTime() + off * 60000);
-      return formatTime(d);
-    });
-    ticks.innerHTML = offsets.map((off, i) => {
-      const cls = off === 0 ? 'timeline-tick now' : off > 0 ? 'timeline-tick future' : 'timeline-tick';
-      return `<span class="${cls}">${labels[i]}</span>`;
+    const sliderMin = parseInt(timeSlider.min);
+    const sliderMax = parseInt(timeSlider.max);
+    const sliderRange = sliderMax - sliderMin;
+    const sliderW = timeSlider.offsetWidth || 300;
+    // Tick definitions: [minuteOffset, sliderValue]
+    // -50m → slider 0, NOW → slider 10, +6h → slider 46, +12h → slider 82, +18h → slider 118
+    const tickDefs = [
+      { off: -50, val: 0 },
+      { off: 0,   val: 10 },
+      { off: 360, val: 46 },
+      { off: 720, val: 82 },
+      { off: 1080, val: 118 }
+    ];
+    ticks.innerHTML = tickDefs.map(t => {
+      const pct = (t.val - sliderMin) / sliderRange;
+      const px = 8 + pct * (sliderW - 16); // match slider thumb positioning
+      const cls = t.off === 0 ? 'timeline-tick now' : t.off > 0 ? 'timeline-tick future' : 'timeline-tick';
+      let label;
+      if (t.off === 0) label = 'NOW';
+      else if (t.off > 0) label = `+${t.off / 60}h`;
+      else { const d = new Date(now.getTime() + t.off * 60000); label = formatTime(d); }
+      return `<span class="${cls}" style="left:${px}px">${label}</span>`;
     }).join('');
   }
 
