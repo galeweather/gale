@@ -2551,6 +2551,30 @@
       }
     });
 
+    // City/municipality limits — admin_level 8 outlines
+    map.addLayer({
+      id: 'city-borders',
+      type: 'line',
+      source: 'labels',
+      'source-layer': 'boundary',
+      filter: ['all', ['==', 'admin_level', 8], ['!has', 'maritime']],
+      minzoom: 7,
+      paint: {
+        'line-color': 'rgba(255, 255, 255, 0.20)',
+        'line-width': [
+          'interpolate', ['linear'], ['zoom'],
+          7, 0.5,
+          10, 1.2,
+          14, 2
+        ],
+        'line-opacity': [
+          'interpolate', ['linear'], ['zoom'],
+          7, 0, 8, 1
+        ],
+        'line-dasharray': [3, 2]
+      }
+    });
+
     // Major roads — motorway, trunk, primary from OpenFreeMap
     map.addLayer({
       id: 'roads-major',
@@ -2806,9 +2830,9 @@
 
     // Shared paint for frosted dark halo
     const labelHalo = {
-      'text-halo-color': 'rgba(10, 14, 23, 0.85)',
-      'text-halo-width': 2,
-      'text-halo-blur': 1.5
+      'text-halo-color': 'rgba(10, 14, 23, 0.92)',
+      'text-halo-width': 2.5,
+      'text-halo-blur': 1
     };
 
     // Tier 1: State names (zoom 3–7, uppercase, muted)
@@ -2854,7 +2878,7 @@
         'text-font': ['Noto Sans Bold'],
         'text-size': [
           'interpolate', ['linear'], ['zoom'],
-          3, 12, 10, 18
+          3, 13, 8, 18, 12, 22
         ],
         'text-allow-overlap': false,
         'text-padding': 4,
@@ -2894,7 +2918,7 @@
         'text-font': ['Noto Sans Bold'],
         'text-size': [
           'interpolate', ['linear'], ['zoom'],
-          4, 11, 10, 15
+          4, 12, 8, 15, 12, 18
         ],
         'text-allow-overlap': false,
         'text-padding': 4,
@@ -2932,7 +2956,10 @@
       layout: {
         'text-field': ['get', 'name'],
         'text-font': ['Noto Sans Regular'],
-        'text-size': 11,
+        'text-size': [
+          'interpolate', ['linear'], ['zoom'],
+          7, 11, 10, 14
+        ],
         'text-allow-overlap': false,
         'text-padding': 4,
         'text-pitch-alignment': 'viewport',
