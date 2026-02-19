@@ -3473,8 +3473,14 @@
       sampleCanvas.width = 256; sampleCanvas.height = 256;
       const sCtx = sampleCanvas.getContext('2d');
       const features = [];
-      const cellHalfLng = lngStep * 0.65;
-      const cellHalfLat = latStep * 0.65;
+      const cellRLng = lngStep * 0.65;
+      const cellRLat = latStep * 0.65;
+      const CIRCLE_PTS = 12; // 12-sided polygon ≈ circle
+      const circleAngles = [];
+      for (let i = 0; i <= CIRCLE_PTS; i++) {
+        const a = (i / CIRCLE_PTS) * Math.PI * 2;
+        circleAngles.push([Math.cos(a), Math.sin(a)]);
+      }
       let lastKey = null;
 
       for (const cell of cells) {
@@ -3490,22 +3496,22 @@
         const d = sCtx.getImageData(px, py, 1, 1).data;
         if (d[3] < 30) continue;
 
+        // Circle polygon
+        const coords = circleAngles.map(([cx, cy]) => [
+          cell.lng + cx * cellRLng,
+          cell.lat + cy * cellRLat
+        ]);
+
         features.push({
           type: 'Feature',
           geometry: {
             type: 'Polygon',
-            coordinates: [[
-              [cell.lng - cellHalfLng, cell.lat - cellHalfLat],
-              [cell.lng + cellHalfLng, cell.lat - cellHalfLat],
-              [cell.lng + cellHalfLng, cell.lat + cellHalfLat],
-              [cell.lng - cellHalfLng, cell.lat + cellHalfLat],
-              [cell.lng - cellHalfLng, cell.lat - cellHalfLat]
-            ]]
+            coordinates: [coords]
           },
           properties: {
             color: `rgb(${d[0]}, ${d[1]}, ${d[2]})`,
-            height: 5000,
-            base: 4000
+            height: 12000,
+            base: 10000
           }
         });
       }
