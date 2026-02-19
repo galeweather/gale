@@ -1539,16 +1539,20 @@
     </div>
     <div class="forecast-extra-grid" id="forecastExtra" style="display:none">
       <div class="forecast-stat">
+        <div class="forecast-stat-label">Feels Like</div>
+        <div class="forecast-stat-value" id="fFeelsLike">—</div>
+      </div>
+      <div class="forecast-stat">
+        <div class="forecast-stat-label">Cloud</div>
+        <div class="forecast-stat-value" id="fCloud">—</div>
+      </div>
+      <div class="forecast-stat">
         <div class="forecast-stat-label">Solar</div>
         <div class="forecast-stat-value" id="fSolar">—</div>
       </div>
       <div class="forecast-stat">
         <div class="forecast-stat-label">UV Index</div>
         <div class="forecast-stat-value" id="fUV">—</div>
-      </div>
-      <div class="forecast-stat">
-        <div class="forecast-stat-label">Cloud</div>
-        <div class="forecast-stat-value" id="fCloud">—</div>
       </div>
     </div>
   </div>
@@ -4186,6 +4190,11 @@
     document.getElementById('fHumidity').textContent = '—';
     document.getElementById('fDewpoint').textContent = '—';
     document.getElementById('fPrecip').textContent = '—';
+    document.getElementById('fFeelsLike').textContent = '—';
+    document.getElementById('fSolar').textContent = '—';
+    document.getElementById('fUV').textContent = '—';
+    document.getElementById('fCloud').textContent = '—';
+    document.getElementById('forecastExtra').style.display = 'none';
     drawer.classList.add('open');
     drawer.setAttribute('aria-hidden', 'false');
 
@@ -4710,15 +4719,23 @@
 
   // ─── Open-Meteo Integration ─────────────────
   function fetchOpenMeteo(lng, lat) {
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(4)}&longitude=${lng.toFixed(4)}&current=shortwave_radiation,uv_index,cloud_cover`;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(4)}&longitude=${lng.toFixed(4)}&current=shortwave_radiation,uv_index,cloud_cover,relative_humidity_2m,dew_point_2m,apparent_temperature,wind_speed_10m&temperature_unit=fahrenheit&wind_speed_unit=mph`;
     fetch(url).then(r => r.json()).then(data => {
       const c = data.current;
       if (!c) return;
       const extraGrid = document.getElementById('forecastExtra');
       extraGrid.style.display = '';
+      document.getElementById('fFeelsLike').textContent = c.apparent_temperature != null ? `${Math.round(c.apparent_temperature)}°F` : '—';
+      document.getElementById('fCloud').textContent = c.cloud_cover != null ? `${Math.round(c.cloud_cover)}%` : '—';
       document.getElementById('fSolar').textContent = c.shortwave_radiation != null ? `${Math.round(c.shortwave_radiation)} W/m²` : '—';
       document.getElementById('fUV').textContent = c.uv_index != null ? c.uv_index.toFixed(1) : '—';
-      document.getElementById('fCloud').textContent = c.cloud_cover != null ? `${Math.round(c.cloud_cover)}%` : '—';
+      // Fill humidity + dew point from Open-Meteo (NWS overrides later if available)
+      if (document.getElementById('fHumidity').textContent === '—' && c.relative_humidity_2m != null) {
+        document.getElementById('fHumidity').textContent = `${Math.round(c.relative_humidity_2m)}%`;
+      }
+      if (document.getElementById('fDewpoint').textContent === '—' && c.dew_point_2m != null) {
+        document.getElementById('fDewpoint').textContent = `${Math.round(c.dew_point_2m)}°F`;
+      }
     }).catch(() => {});
   }
 
