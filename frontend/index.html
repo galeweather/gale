@@ -3522,9 +3522,9 @@
     south = Math.max(south, 22); north = Math.min(north, 52);
     if (west >= east || south >= north) return;
 
-    // Cell size: 0.05° max, shrinks proportionally when zoomed in
+    // Cell size: 0.025° max (~2.5km), shrinks proportionally when zoomed in
     const viewDeg = (east - west) / 60;
-    const CELL_DEG = Math.min(viewDeg, 0.05);
+    const CELL_DEG = Math.min(viewDeg, 0.025);
     const COLS = Math.ceil((east - west) / CELL_DEG);
     const ROWS = Math.ceil((north - south) / CELL_DEG);
     const MAX_CELLS = 10000;
