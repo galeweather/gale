@@ -4726,7 +4726,11 @@
       const extraGrid = document.getElementById('forecastExtra');
       extraGrid.style.display = '';
       document.getElementById('fFeelsLike').textContent = c.apparent_temperature != null ? `${Math.round(c.apparent_temperature)}°F` : '—';
-      document.getElementById('fCloud').textContent = c.cloud_cover != null ? `${Math.round(c.cloud_cover)}%` : '—';
+      if (c.cloud_cover != null) {
+        const cc = Math.round(c.cloud_cover);
+        const desc = cc === 0 ? 'Clear' : cc <= 25 ? 'Mostly Clear' : cc <= 50 ? 'Partly Cloudy' : cc <= 75 ? 'Mostly Cloudy' : 'Overcast';
+        document.getElementById('fCloud').textContent = `${desc} (${cc}%)`;
+      }
       document.getElementById('fSolar').textContent = c.shortwave_radiation != null ? `${Math.round(c.shortwave_radiation)} W/m²` : '—';
       document.getElementById('fUV').textContent = c.uv_index != null ? c.uv_index.toFixed(1) : '—';
       // Fill humidity + dew point from Open-Meteo (NWS overrides later if available)
