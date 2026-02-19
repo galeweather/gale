@@ -3527,7 +3527,7 @@
     const CELL_DEG = Math.min(viewDeg, 0.025);
     const COLS = Math.ceil((east - west) / CELL_DEG);
     const ROWS = Math.ceil((north - south) / CELL_DEG);
-    const MAX_CELLS = 6000; // lower cap since each cloud = 5 sphere slices
+    const MAX_CELLS = 4000; // cap since each cloud = 8 sphere slices
     if (COLS * ROWS > MAX_CELLS) return;
     const lngStep = CELL_DEG;
     const latStep = CELL_DEG;
@@ -3618,24 +3618,25 @@
         const dbz = Math.min(65, 10 + redDom * 45 + (maxC / 255) * 20);
 
         // ── Cloud type from dBZ (meteorological classification) ──
-        // Base heights intentionally vary widely so clouds sit at different levels
+        // Real altitudes ×3 exaggeration — MapLibre's vertical scale is compressed
+        // relative to horizontal, so true altitudes look ground-hugging
         let baseH, topH;
         if (dbz < 20) {
-          // Stratus / nimbostratus — base 800-2500m, thin
-          baseH = 800 + rnd4 * 1700;
-          topH = baseH + 1500 + rnd1 * 1500;
+          // Stratus / light precip — base 2500-7500m (vis), thin
+          baseH = 2500 + rnd4 * 5000;
+          topH = baseH + 4000 + rnd1 * 4000;
         } else if (dbz < 35) {
-          // Nimbostratus — base 500-2000m, moderate
-          baseH = 500 + rnd4 * 1500;
-          topH = baseH + 3000 + rnd1 * 2500;
+          // Nimbostratus — base 1800-6000m (vis), moderate
+          baseH = 1800 + rnd4 * 4200;
+          topH = baseH + 8000 + rnd1 * 7000;
         } else if (dbz < 50) {
-          // Cumulonimbus — base 400-1200m, tall
-          baseH = 400 + rnd4 * 800;
-          topH = baseH + 6000 + rnd1 * 4000;
+          // Cumulonimbus — base 1500-4000m (vis), tall
+          baseH = 1500 + rnd4 * 2500;
+          topH = baseH + 16000 + rnd1 * 12000;
         } else {
-          // Deep cumulonimbus — base 300-700m, very tall
-          baseH = 300 + rnd4 * 400;
-          topH = baseH + 10000 + rnd1 * 4000;
+          // Deep cumulonimbus — base 1200-2500m (vis), very tall
+          baseH = 1200 + rnd4 * 1300;
+          topH = baseH + 28000 + rnd1 * 12000;
         }
         baseH = Math.round(baseH);
         topH = Math.round(topH);
@@ -3655,9 +3656,9 @@
         const cLng = cell.lng + (rnd2 - 0.5) * lngStep * 0.2;
         const cLat = cell.lat + (rnd3 - 0.5) * latStep * 0.2;
 
-        // ── Sphere approximation: 5 stacked slices ──
+        // ── Sphere approximation: 8 stacked slices ──
         // Radius follows sin(π*f) — narrow at base/top, widest at equator
-        const SLICES = 5;
+        const SLICES = 8;
         const thickness = topH - baseH;
         for (let s = 0; s < SLICES; s++) {
           const f0 = s / SLICES;       // fraction start (0-1)
