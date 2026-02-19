@@ -3447,7 +3447,8 @@
 
     // Get current radar product from timeline
     const sliderVal = parseInt(timeSlider.value);
-    const radarIdx = sliderVal <= 10 ? sliderToRadarIdx(sliderVal) : 0;
+    const isFuture = sliderVal > 10;
+    const radarIdx = !isFuture ? sliderToRadarIdx(sliderVal) : 0;
     const product = radarProducts[radarIdx];
 
     // Collect unique tiles needed
@@ -3466,7 +3467,10 @@
         cells.push({ lng, lat, tileKey, px: pixel.px, py: pixel.py });
 
         if (!tilePromises.has(tileKey)) {
-          const url = `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/${product}/${z}/${tile.x}/${tile.y}.png`;
+          // In future zone: use HRRR precip tiles from R2; in past: use MRMS radar
+          const url = isFuture
+            ? `${TILE_BASE}/precipitation/${z}/${tile.x}/${tile.y}.png`
+            : `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/${product}/${z}/${tile.x}/${tile.y}.png`;
           tilePromises.set(tileKey, new Promise(resolve => {
             const img = new Image();
             img.crossOrigin = 'anonymous';
@@ -3887,8 +3891,8 @@
     timeLabel.textContent = getTimelineLabel(val);
     timeSlider.setAttribute('aria-valuetext', val === 10 ? 'Now' : val < 10 ? `${(10 - val) * 5} minutes ago` : `+${val - 10} minutes`);
     positionTimeLabel();
-    // Update elevated radar on frame change
-    if (elevatedRadarOn && val <= 10) {
+    // Update elevated radar on frame change (past and future)
+    if (elevatedRadarOn) {
       clearTimeout(elevRadarTimer);
       elevRadarTimer = setTimeout(updateElevatedRadar, 200);
     }
