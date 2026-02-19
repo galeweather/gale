@@ -1836,9 +1836,10 @@
     // 3D Terrain — DEM tiles for real elevation
     map.addSource('dem', {
       type: 'raster-dem',
-      tiles: ['https://demotiles.maplibre.org/terrain-tiles/{z}/{x}/{y}.png'],
+      tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
       tileSize: 256,
-      maxzoom: 12
+      maxzoom: 15,
+      encoding: 'terrarium'
     });
     map.setTerrain({ source: 'dem', exaggeration: 1.5 });
 
