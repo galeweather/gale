@@ -2218,55 +2218,7 @@
       layout: { visibility: layers.temp ? 'visible' : 'none' }
     });
 
-    // CONUS mask — dark fill covering everything outside HRRR data bounds
-    // Hides red nodata pixels bleeding from edge tiles
-    map.addSource('conus-mask', {
-      type: 'geojson',
-      data: {
-        type: 'Feature',
-        geometry: {
-          type: 'Polygon',
-          coordinates: [
-            // Outer ring: covers the whole world
-            [[-180, -85], [180, -85], [180, 85], [-180, 85], [-180, -85]],
-            // Inner ring (hole): CONUS data area — slightly inside actual bounds
-            [[-125, 24.5], [-66.5, 24.5], [-66.5, 49.5], [-125, 49.5], [-125, 24.5]]
-          ]
-        }
-      }
-    });
-
-    map.addLayer({
-      id: 'conus-mask-layer',
-      type: 'fill',
-      source: 'conus-mask',
-      paint: {
-        'fill-color': '#0a0e17',
-        'fill-opacity': 1
-      }
-    });
-
-    // MRMS Radar — Iowa State Mesonet (renders on top of temperature/wind/precip)
-    map.addSource('radar', {
-      type: 'raster',
-      tiles: [
-        'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/{z}/{x}/{y}.png'
-      ],
-      tileSize: 256,
-      attribution: '&copy; <a href="https://mesonet.agron.iastate.edu">Iowa State Mesonet</a>'
-    });
-
-    map.addLayer({
-      id: 'radar-layer',
-      type: 'raster',
-      source: 'radar',
-      paint: {
-        'raster-opacity': 0.7,
-        'raster-fade-duration': 300
-      }
-    });
-
-    // HRRR Precipitation forecast overlay (futurecast radar)
+    // HRRR Precipitation forecast overlay (futurecast radar) — below mask
     map.addSource('precip-forecast', {
       type: 'raster',
       tiles: [`${TILE_BASE}/precipitation/{z}/{x}/{y}.png`],
@@ -2284,6 +2236,55 @@
         'raster-fade-duration': 0
       },
       layout: { visibility: 'visible' }
+    });
+
+    // CONUS mask — dark fill covering everything outside HRRR data bounds
+    // Hides red nodata pixels bleeding from edge tiles
+    // Outer ring CCW, inner ring CW (hole) per GeoJSON RFC 7946
+    map.addSource('conus-mask', {
+      type: 'geojson',
+      data: {
+        type: 'Feature',
+        geometry: {
+          type: 'Polygon',
+          coordinates: [
+            // Outer ring (CCW): covers the whole world
+            [[-180, -85], [180, -85], [180, 85], [-180, 85], [-180, -85]],
+            // Inner ring (CW = hole): CONUS data area
+            [[-125, 24.5], [-125, 49.5], [-66.5, 49.5], [-66.5, 24.5], [-125, 24.5]]
+          ]
+        }
+      }
+    });
+
+    map.addLayer({
+      id: 'conus-mask-layer',
+      type: 'fill',
+      source: 'conus-mask',
+      paint: {
+        'fill-color': '#0a0e17',
+        'fill-opacity': 1
+      }
+    });
+
+    // MRMS Radar — Iowa State Mesonet (renders on top of mask)
+    map.addSource('radar', {
+      type: 'raster',
+      tiles: [
+        'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/{z}/{x}/{y}.png'
+      ],
+      tileSize: 256,
+      attribution: '&copy; <a href="https://mesonet.agron.iastate.edu">Iowa State Mesonet</a>'
+    });
+
+    map.addLayer({
+      id: 'radar-layer',
+      type: 'raster',
+      source: 'radar',
+      paint: {
+        'raster-opacity': 0.7,
+        'raster-fade-duration': 300
+      }
     });
 
     // Satellite — GOES visible via Iowa State Mesonet
@@ -3452,13 +3453,21 @@
     announce(`Elevated radar ${elevatedRadarOn ? 'on' : 'off'}`);
   }
 
+  // Simple hash for deterministic per-cell randomness (no Math.random)
+  function cellHash(lng, lat) {
+    const x = Math.round(lng * 1000), y = Math.round(lat * 1000);
+    let h = (x * 374761393 + y * 668265263) ^ 0x5bd1e995;
+    h = Math.imul(h ^ (h >>> 15), 0x1b873593);
+    return (h ^ (h >>> 13)) >>> 0;
+  }
+
   function updateElevatedRadar() {
     if (!elevatedRadarOn) return;
 
     const bounds = map.getBounds();
     let west = bounds.getWest(), east = bounds.getEast();
     let north = bounds.getNorth(), south = bounds.getSouth();
-    // Clamp to CONUS to avoid sampling empty ocean tiles
+    // Clamp to CONUS
     west = Math.max(west, -130); east = Math.min(east, -65);
     south = Math.max(south, 22); north = Math.min(north, 52);
     if (west >= east || south >= north) return;
@@ -3469,7 +3478,7 @@
     const COLS = Math.ceil((east - west) / CELL_DEG);
     const ROWS = Math.ceil((north - south) / CELL_DEG);
     const MAX_CELLS = 10000;
-    if (COLS * ROWS > MAX_CELLS) return; // too zoomed out, skip
+    if (COLS * ROWS > MAX_CELLS) return;
     const lngStep = CELL_DEG;
     const latStep = CELL_DEG;
     const z = Math.min(Math.floor(map.getZoom()), 6);
@@ -3481,11 +3490,10 @@
     const radarIdx = !isFuture ? sliderToRadarIdx(sliderVal) : 0;
     const product = radarProducts[radarIdx];
 
-    // Collect unique tiles needed
     const tilePromises = new Map();
     const cells = [];
 
-    // Snap grid to fixed geographic positions so cells don't shift on pan
+    // Snap grid to fixed geographic positions
     const startLng = Math.floor(west / CELL_DEG) * CELL_DEG + CELL_DEG / 2;
     const startLat = Math.floor(south / CELL_DEG) * CELL_DEG + CELL_DEG / 2;
 
@@ -3497,7 +3505,6 @@
         cells.push({ lng, lat, tileKey, px: pixel.px, py: pixel.py });
 
         if (!tilePromises.has(tileKey)) {
-          // In future zone: use HRRR precip tiles from R2; in past: use MRMS radar
           const url = isFuture
             ? `${TILE_BASE}/precipitation/${z}/${tile.x}/${tile.y}.png`
             : `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/${product}/${z}/${tile.x}/${tile.y}.png`;
@@ -3513,21 +3520,20 @@
     }
 
     Promise.all([...tilePromises.entries()].map(([key, p]) => p.then(img => [key, img]))).then(results => {
-      if (!elevatedRadarOn) return; // toggled off while loading
+      if (!elevatedRadarOn) return;
       const tileImages = new Map(results);
       const sampleCanvas = document.createElement('canvas');
       sampleCanvas.width = 256; sampleCanvas.height = 256;
       const sCtx = sampleCanvas.getContext('2d');
       const features = [];
-      const cellRLng = lngStep * 0.65;
-      const cellRLat = latStep * 0.65;
-      const CIRCLE_PTS = 12; // 12-sided polygon ≈ circle
-      const circleAngles = [];
-      for (let i = 0; i <= CIRCLE_PTS; i++) {
-        const a = (i / CIRCLE_PTS) * Math.PI * 2;
-        circleAngles.push([Math.cos(a), Math.sin(a)]);
-      }
       let lastKey = null;
+
+      // Precompute circle template (16 points for smoother shape)
+      const CIRCLE_PTS = 16;
+      const baseAngles = [];
+      for (let i = 0; i <= CIRCLE_PTS; i++) {
+        baseAngles.push((i / CIRCLE_PTS) * Math.PI * 2);
+      }
 
       for (const cell of cells) {
         const img = tileImages.get(cell.tileKey);
@@ -3542,29 +3548,78 @@
         const d = sCtx.getImageData(px, py, 1, 1).data;
         if (d[3] < 30) continue;
 
-        // Intensity: brighter pixels = heavier precip = taller clouds
-        const intensity = (d[0] + d[1] + d[2]) / (255 * 3); // 0-1
-        const baseH = 10000;
-        const topH = baseH + 2000 + intensity * 10000; // 12k light → 22k heavy
+        // Precipitation intensity 0→1
+        const intensity = (d[0] + d[1] + d[2]) / (255 * 3);
+        const h = cellHash(cell.lng, cell.lat);
+        const rnd1 = (h & 0xFF) / 255;           // 0-1 for size variation
+        const rnd2 = ((h >> 8) & 0xFF) / 255;     // 0-1 for position jitter
+        const rnd3 = ((h >> 16) & 0xFF) / 255;    // 0-1 for shape wobble
+        const rnd4 = ((h >> 24) & 0xFF) / 255;    // 0-1 for height variation
 
-        // Circle polygon
-        const coords = circleAngles.map(([cx, cy]) => [
-          cell.lng + cx * cellRLng,
-          cell.lat + cy * cellRLat
-        ]);
+        // Skip ~15% of light-precip cells randomly for natural gaps
+        if (intensity < 0.25 && rnd1 < 0.15) continue;
+
+        // Realistic cloud color: white for light, darkening to gray for heavy
+        // Light precip = bright white-gray cloud, heavy = dark gray storm cloud
+        const lightness = Math.round(240 - intensity * 120); // 240 (white) → 120 (dark gray)
+        const color = `rgb(${lightness}, ${lightness}, ${Math.min(255, lightness + 10)})`;
+
+        // Size varies with intensity: heavier precip = larger cloud mass
+        const sizeScale = 0.5 + intensity * 0.4 + rnd1 * 0.3; // 0.5-1.2x
+        const cellRLng = lngStep * 0.6 * sizeScale;
+        const cellRLat = latStep * 0.6 * sizeScale;
+
+        // Position jitter (up to 30% of cell size) breaks the grid
+        const jitterLng = (rnd2 - 0.5) * lngStep * 0.3;
+        const jitterLat = (rnd3 - 0.5) * latStep * 0.3;
+        const cLng = cell.lng + jitterLng;
+        const cLat = cell.lat + jitterLat;
+
+        // Cloud altitude based on precip type:
+        // Light rain: low stratus 2-4km, thin layer
+        // Moderate: mid-level 3-7km, thicker
+        // Heavy/severe: tall cumulonimbus 2-12km, very thick
+        const baseH = 3000 + rnd4 * 2000 - intensity * 1000; // 2k-5k
+        const thickness = 1000 + intensity * 8000; // 1km light → 9km heavy
+        const topH = baseH + thickness;
+
+        // Irregular cloud shape: wobble the radius per vertex
+        const wobbleAmt = 0.15 + rnd3 * 0.15; // 15-30% radius variation
+        const coords = baseAngles.map((a, i) => {
+          // Deterministic per-vertex wobble using angle index
+          const vHash = ((h + i * 2654435761) >>> 0) & 0xFF;
+          const wobble = 1.0 + (vHash / 255 - 0.5) * wobbleAmt * 2;
+          return [
+            cLng + Math.cos(a) * cellRLng * wobble,
+            cLat + Math.sin(a) * cellRLat * wobble
+          ];
+        });
 
         features.push({
           type: 'Feature',
-          geometry: {
-            type: 'Polygon',
-            coordinates: [coords]
-          },
-          properties: {
-            color: `rgb(${d[0]}, ${d[1]}, ${d[2]})`,
-            height: topH,
-            base: baseH
-          }
+          geometry: { type: 'Polygon', coordinates: [coords] },
+          properties: { color, height: topH, base: baseH }
         });
+
+        // Heavy precip: add a second higher anvil/turret on top (cumulonimbus tower)
+        if (intensity > 0.5) {
+          const anvilR = cellRLng * 0.6;
+          const anvilCoords = baseAngles.map(a => [
+            cLng + Math.cos(a) * anvilR,
+            cLat + Math.sin(a) * anvilR * 0.8
+          ]);
+          const anvilBase = topH;
+          const anvilTop = anvilBase + intensity * 4000;
+          const darkL = Math.round(lightness * 0.8);
+          features.push({
+            type: 'Feature',
+            geometry: { type: 'Polygon', coordinates: [anvilCoords] },
+            properties: {
+              color: `rgb(${darkL}, ${darkL}, ${Math.min(255, darkL + 8)})`,
+              height: anvilTop, base: anvilBase
+            }
+          });
+        }
       }
 
       const geojson = { type: 'FeatureCollection', features };
@@ -3578,7 +3633,7 @@
             'fill-extrusion-color': ['get', 'color'],
             'fill-extrusion-height': ['get', 'height'],
             'fill-extrusion-base': ['get', 'base'],
-            'fill-extrusion-opacity': 0.25
+            'fill-extrusion-opacity': 0.35
           }
         });
       } else {
