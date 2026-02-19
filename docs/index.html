@@ -2528,6 +2528,44 @@
       }
     });
 
+    // Water bodies — lakes, rivers, coastline for orientation
+    map.addLayer({
+      id: 'water-fill',
+      type: 'fill',
+      source: 'labels',
+      'source-layer': 'water',
+      paint: {
+        'fill-color': 'rgba(30, 60, 100, 0.35)',
+        'fill-outline-color': 'rgba(100, 160, 220, 0.3)'
+      }
+    });
+
+    // Water body labels
+    map.addLayer({
+      id: 'water-labels',
+      type: 'symbol',
+      source: 'labels',
+      'source-layer': 'water_name',
+      minzoom: 5,
+      layout: {
+        'text-field': ['get', 'name'],
+        'text-font': ['Noto Sans Italic'],
+        'text-size': [
+          'interpolate', ['linear'], ['zoom'],
+          5, 10, 10, 14
+        ],
+        'text-allow-overlap': false,
+        'text-padding': 8,
+        'text-pitch-alignment': 'viewport',
+        'text-rotation-alignment': 'viewport'
+      },
+      paint: {
+        'text-color': 'rgba(120, 180, 240, 0.7)',
+        'text-halo-color': 'rgba(10, 14, 23, 0.85)',
+        'text-halo-width': 1.5
+      }
+    });
+
     // County boundaries — subtle shading from OpenFreeMap vector tiles
     map.addLayer({
       id: 'county-borders',
@@ -2558,31 +2596,31 @@
       source: 'labels',
       'source-layer': 'boundary',
       filter: ['all', ['==', 'admin_level', 8], ['!has', 'maritime']],
-      minzoom: 7,
+      minzoom: 6,
       paint: {
-        'line-color': 'rgba(255, 255, 255, 0.20)',
+        'line-color': 'rgba(200, 220, 255, 0.50)',
         'line-width': [
           'interpolate', ['linear'], ['zoom'],
-          7, 0.5,
-          10, 1.2,
-          14, 2
+          6, 0.8,
+          9, 1.8,
+          12, 2.5,
+          14, 3
         ],
         'line-opacity': [
           'interpolate', ['linear'], ['zoom'],
-          7, 0, 8, 1
-        ],
-        'line-dasharray': [3, 2]
+          6, 0, 7, 1
+        ]
       }
     });
 
-    // Major roads — motorway, trunk, primary from OpenFreeMap
+    // Major roads — motorway + trunk: bright, clear lines
     map.addLayer({
-      id: 'roads-major',
+      id: 'roads-motorway',
       type: 'line',
       source: 'labels',
       'source-layer': 'transportation',
-      filter: ['in', 'class', 'motorway', 'trunk', 'primary'],
-      minzoom: 5,
+      filter: ['in', 'class', 'motorway', 'trunk'],
+      minzoom: 4,
       layout: {
         'line-cap': 'round',
         'line-join': 'round'
@@ -2590,19 +2628,46 @@
       paint: {
         'line-color': [
           'match', ['get', 'class'],
-          'motorway', 'rgba(255, 170, 56, 0.2)',
-          'trunk', 'rgba(255, 170, 56, 0.15)',
-          'rgba(255, 255, 255, 0.1)'
+          'motorway', 'rgba(255, 180, 70, 0.55)',
+          'rgba(255, 180, 70, 0.40)'
         ],
         'line-width': [
           'interpolate', ['linear'], ['zoom'],
-          5, 0.3,
-          8, 1,
-          12, 2
+          4, 0.5,
+          7, 1.5,
+          10, 2.5,
+          14, 4
         ],
         'line-opacity': [
           'interpolate', ['linear'], ['zoom'],
-          5, 0, 6, 1
+          4, 0, 5, 1
+        ]
+      }
+    });
+
+    // Primary roads
+    map.addLayer({
+      id: 'roads-primary',
+      type: 'line',
+      source: 'labels',
+      'source-layer': 'transportation',
+      filter: ['==', 'class', 'primary'],
+      minzoom: 6,
+      layout: {
+        'line-cap': 'round',
+        'line-join': 'round'
+      },
+      paint: {
+        'line-color': 'rgba(255, 255, 255, 0.25)',
+        'line-width': [
+          'interpolate', ['linear'], ['zoom'],
+          6, 0.5,
+          10, 1.5,
+          14, 2.5
+        ],
+        'line-opacity': [
+          'interpolate', ['linear'], ['zoom'],
+          6, 0, 7, 1
         ]
       }
     });
@@ -2620,15 +2685,78 @@
         'line-join': 'round'
       },
       paint: {
-        'line-color': 'rgba(255, 255, 255, 0.08)',
+        'line-color': 'rgba(255, 255, 255, 0.15)',
         'line-width': [
           'interpolate', ['linear'], ['zoom'],
-          8, 0.3,
-          12, 1
+          8, 0.5,
+          12, 1.5
         ],
         'line-opacity': [
           'interpolate', ['linear'], ['zoom'],
           8, 0, 9, 1
+        ]
+      }
+    });
+
+    // Highway route labels — Interstate/US/State route numbers
+    map.addLayer({
+      id: 'road-labels-motorway',
+      type: 'symbol',
+      source: 'labels',
+      'source-layer': 'transportation_name',
+      filter: ['in', 'class', 'motorway', 'trunk'],
+      minzoom: 6,
+      layout: {
+        'text-field': ['get', 'ref'],
+        'text-font': ['Noto Sans Bold'],
+        'text-size': [
+          'interpolate', ['linear'], ['zoom'],
+          6, 10, 10, 13
+        ],
+        'symbol-placement': 'line',
+        'symbol-spacing': 400,
+        'text-rotation-alignment': 'viewport',
+        'text-pitch-alignment': 'viewport',
+        'text-keep-upright': true,
+        'text-max-angle': 30
+      },
+      paint: {
+        'text-color': '#ffb446',
+        'text-halo-color': 'rgba(10, 14, 23, 0.92)',
+        'text-halo-width': 2,
+        'text-opacity': [
+          'interpolate', ['linear'], ['zoom'],
+          6, 0, 7, 1
+        ]
+      }
+    });
+
+    // Primary road labels
+    map.addLayer({
+      id: 'road-labels-primary',
+      type: 'symbol',
+      source: 'labels',
+      'source-layer': 'transportation_name',
+      filter: ['==', 'class', 'primary'],
+      minzoom: 9,
+      layout: {
+        'text-field': ['coalesce', ['get', 'ref'], ['get', 'name']],
+        'text-font': ['Noto Sans Regular'],
+        'text-size': 11,
+        'symbol-placement': 'line',
+        'symbol-spacing': 500,
+        'text-rotation-alignment': 'viewport',
+        'text-pitch-alignment': 'viewport',
+        'text-keep-upright': true,
+        'text-max-angle': 30
+      },
+      paint: {
+        'text-color': 'rgba(255, 255, 255, 0.7)',
+        'text-halo-color': 'rgba(10, 14, 23, 0.92)',
+        'text-halo-width': 2,
+        'text-opacity': [
+          'interpolate', ['linear'], ['zoom'],
+          9, 0, 10, 1
         ]
       }
     });
