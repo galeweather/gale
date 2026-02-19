@@ -2775,8 +2775,10 @@
 
   // ─── Layer Toggle ───────────────────────────
   function updateLayerVisibility() {
-    // Radar: use elevated 3D in 3D mode, flat raster in 2D
-    updateElevatedRadar();
+    // Radar: flat raster drapes over terrain automatically in 3D
+    if (map.getLayer('radar-layer')) {
+      map.setLayoutProperty('radar-layer', 'visibility', layers.radar ? 'visible' : 'none');
+    }
     if (map.getLayer('satellite-layer')) {
       map.setLayoutProperty('satellite-layer', 'visibility', layers.satellite ? 'visible' : 'none');
     }
@@ -2908,138 +2910,6 @@
     });
   });
 
-  // ─── Elevated Radar (3D fill-extrusion at cloud altitude) ──────
-  let radarElevTimer = null;
-
-  function updateElevatedRadar() {
-    if (!is3D || !layers.radar) {
-      // Hide 3D radar, show flat
-      if (map.getLayer('radar-3d-layer')) {
-        map.setLayoutProperty('radar-3d-layer', 'visibility', 'none');
-      }
-      if (map.getLayer('radar-layer')) {
-        map.setLayoutProperty('radar-layer', 'visibility', layers.radar ? 'visible' : 'none');
-      }
-      return;
-    }
-
-    // 3D + radar on: hide flat raster, build elevated layer
-    if (map.getLayer('radar-layer')) {
-      map.setLayoutProperty('radar-layer', 'visibility', 'none');
-    }
-
-    const bounds = map.getBounds();
-    const west = bounds.getWest(), east = bounds.getEast();
-    const north = bounds.getNorth(), south = bounds.getSouth();
-    const COLS = 20, ROWS = 15;
-    const lngStep = (east - west) / COLS;
-    const latStep = (north - south) / ROWS;
-    const z = Math.min(Math.floor(map.getZoom()), 6);
-    if (z < 2) return;
-
-    // Get current radar product
-    const sliderVal = parseInt(timeSlider.value);
-    const radarIdx = sliderVal <= 10 ? sliderToRadarIdx(sliderVal) : 0;
-    const product = radarProducts[radarIdx];
-
-    // Collect unique tiles needed
-    const tilePromises = new Map();
-    const cells = [];
-
-    for (let row = 0; row < ROWS; row++) {
-      for (let col = 0; col < COLS; col++) {
-        const lng = west + (col + 0.5) * lngStep;
-        const lat = south + (row + 0.5) * latStep;
-        const tile = lngLatToTile(lng, lat, z);
-        const pixel = lngLatToPixelInTile(lng, lat, z, tile.x, tile.y);
-        const tileKey = `${z}/${tile.x}/${tile.y}`;
-        cells.push({ lng, lat, tileKey, px: pixel.px, py: pixel.py });
-
-        if (!tilePromises.has(tileKey)) {
-          const url = `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/${product}/${z}/${tile.x}/${tile.y}.png`;
-          tilePromises.set(tileKey, new Promise(resolve => {
-            const img = new Image();
-            img.crossOrigin = 'anonymous';
-            img.onload = () => resolve(img);
-            img.onerror = () => resolve(null);
-            img.src = url;
-          }));
-        }
-      }
-    }
-
-    // Sample all tiles and build features
-    Promise.all([...tilePromises.entries()].map(([key, p]) => p.then(img => [key, img]))).then(results => {
-      const tileImages = new Map(results);
-      const sampleCanvas = document.createElement('canvas');
-      sampleCanvas.width = 256; sampleCanvas.height = 256;
-      const sCtx = sampleCanvas.getContext('2d');
-      const features = [];
-      const cellHalfLng = lngStep * 0.48;
-      const cellHalfLat = latStep * 0.48;
-      let lastKey = null;
-
-      for (const cell of cells) {
-        const img = tileImages.get(cell.tileKey);
-        if (!img) continue;
-        if (cell.tileKey !== lastKey) {
-          sCtx.clearRect(0, 0, 256, 256);
-          sCtx.drawImage(img, 0, 0);
-          lastKey = cell.tileKey;
-        }
-        const px = Math.max(0, Math.min(255, Math.round(cell.px)));
-        const py = Math.max(0, Math.min(255, Math.round(cell.py)));
-        const d = sCtx.getImageData(px, py, 1, 1).data;
-        if (d[3] < 30) continue; // transparent = no precip
-
-        features.push({
-          type: 'Feature',
-          geometry: {
-            type: 'Polygon',
-            coordinates: [[
-              [cell.lng - cellHalfLng, cell.lat - cellHalfLat],
-              [cell.lng + cellHalfLng, cell.lat - cellHalfLat],
-              [cell.lng + cellHalfLng, cell.lat + cellHalfLat],
-              [cell.lng - cellHalfLng, cell.lat + cellHalfLat],
-              [cell.lng - cellHalfLng, cell.lat - cellHalfLat]
-            ]]
-          },
-          properties: {
-            color: `rgb(${d[0]}, ${d[1]}, ${d[2]})`,
-            height: 4500,
-            base: 3500
-          }
-        });
-      }
-
-      const geojson = { type: 'FeatureCollection', features };
-      if (!map.getSource('radar-3d')) {
-        map.addSource('radar-3d', { type: 'geojson', data: geojson });
-        map.addLayer({
-          id: 'radar-3d-layer',
-          type: 'fill-extrusion',
-          source: 'radar-3d',
-          paint: {
-            'fill-extrusion-color': ['get', 'color'],
-            'fill-extrusion-height': ['get', 'height'],
-            'fill-extrusion-base': ['get', 'base'],
-            'fill-extrusion-opacity': 0.5
-          }
-        });
-      } else {
-        map.getSource('radar-3d').setData(geojson);
-        map.setLayoutProperty('radar-3d-layer', 'visibility', 'visible');
-      }
-    });
-  }
-
-  // Debounced elevated radar update on map move
-  map.on('moveend', () => {
-    if (!is3D || !layers.radar) return;
-    clearTimeout(radarElevTimer);
-    radarElevTimer = setTimeout(updateElevatedRadar, 300);
-  });
-
   // ─── 3D / 2D View Toggle ──────────────────────
   let is3D = true;
   const viewToggle = document.getElementById('viewToggle');
@@ -3048,8 +2918,6 @@
     is3D = !is3D;
     map.easeTo({ pitch: is3D ? 60 : 0, duration: 600 });
     map.setTerrain(is3D ? { source: 'dem', exaggeration: 1.5 } : null);
-    // Toggle elevated radar
-    updateElevatedRadar();
     viewToggle.classList.toggle('active', is3D);
     viewToggle.querySelector('span').textContent = is3D ? '3D' : '2D';
     viewToggle.setAttribute('aria-pressed', String(is3D));
@@ -3329,11 +3197,6 @@
     timeLabel.textContent = getTimelineLabel(val);
     timeSlider.setAttribute('aria-valuetext', val === 10 ? 'Now' : val < 10 ? `${(10 - val) * 5} minutes ago` : `+${val - 10} minutes`);
     positionTimeLabel();
-    // Update elevated radar when frame changes
-    if (is3D && layers.radar && val <= 10) {
-      clearTimeout(radarElevTimer);
-      radarElevTimer = setTimeout(updateElevatedRadar, 200);
-    }
   });
 
   // Position label on load
@@ -3948,8 +3811,6 @@
   // ─── Load Atmosphere on Startup ────────────
   map.on('load', () => {
     loadAtmosphereProfile();
-    // Initial elevated radar update (delayed for tiles to load)
-    setTimeout(updateElevatedRadar, 2000);
   });
 
   // ─── Keyboard Shortcuts ─────────────────────
