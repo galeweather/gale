@@ -2528,6 +2528,12 @@
       }
     });
 
+    // OpenFreeMap vector source — used by water, boundaries, roads, and place labels
+    map.addSource('labels', {
+      type: 'vector',
+      url: 'https://tiles.openfreemap.org/planet'
+    });
+
     // Water bodies — lakes, rivers, coastline for orientation
     map.addLayer({
       id: 'water-fill',
@@ -2951,10 +2957,7 @@
     });
 
     // ── Vector Place Labels (OpenFreeMap, renders above all weather) ──
-    map.addSource('labels', {
-      type: 'vector',
-      url: 'https://tiles.openfreemap.org/planet'
-    });
+    // (source added earlier, before water/roads/boundaries that use it)
 
     // Shared paint for frosted dark halo
     const labelHalo = {
