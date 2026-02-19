@@ -2670,7 +2670,7 @@
       source: 'wind-labels',
       layout: {
         'text-field': '\u2193',
-        'text-size': 28,
+        'text-size': 36,
         'text-font': ['Noto Sans Bold'],
         'text-rotation-alignment': 'viewport',
         'text-rotate': ['get', 'direction'],
@@ -3133,14 +3133,14 @@
     const bounds = map.getBounds();
     const west = bounds.getWest(), east = bounds.getEast();
     const north = bounds.getNorth(), south = bounds.getSouth();
-    const cols = 5, rows = 4;
+    const cols = 5, rows = 3;
     const lngStep = (east - west) / cols;
     const latStep = (north - south) / rows;
 
     const features = [];
     const promises = [];
-    for (let row = 0.5; row <= rows; row++) {
-      for (let col = 0.5; col <= cols; col++) {
+    for (let row = 0.5; row < rows; row++) {
+      for (let col = 0.5; col < cols; col++) {
         const lng = west + col * lngStep;
         const lat = south + row * latStep;
         const samplePromise = forecastHourFrac > 0
@@ -3183,14 +3183,14 @@
     const bounds = map.getBounds();
     const west = bounds.getWest(), east = bounds.getEast();
     const north = bounds.getNorth(), south = bounds.getSouth();
-    const cols = 4, rows = 3;
+    const cols = 5, rows = 3;
     const lngStep = (east - west) / cols;
     const latStep = (north - south) / rows;
 
     const features = [];
     const promises = [];
-    for (let row = 0.5; row <= rows; row++) {
-      for (let col = 0.5; col <= cols; col++) {
+    for (let row = 0.5; row < rows; row++) {
+      for (let col = 0.5; col < cols; col++) {
         const lng = west + col * lngStep;
         const lat = south + row * latStep;
         promises.push(
