@@ -2238,22 +2238,23 @@
       layout: { visibility: 'visible' }
     });
 
-    // CONUS mask — dark fill covering everything outside HRRR data bounds
-    // Hides red nodata pixels bleeding from edge tiles
-    // Outer ring CCW, inner ring CW (hole) per GeoJSON RFC 7946
+    // CONUS mask — 4 rectangles framing the HRRR data area to hide red nodata
+    // Using separate rectangles instead of polygon-with-hole avoids MapLibre
+    // rendering issues with global-extent polygons in 3D/terrain mode
     map.addSource('conus-mask', {
       type: 'geojson',
       data: {
-        type: 'Feature',
-        geometry: {
-          type: 'Polygon',
-          coordinates: [
-            // Outer ring (CCW): covers the whole world
-            [[-180, -85], [180, -85], [180, 85], [-180, 85], [-180, -85]],
-            // Inner ring (CW = hole): CONUS data area
-            [[-125, 24.5], [-125, 49.5], [-66.5, 49.5], [-66.5, 24.5], [-125, 24.5]]
-          ]
-        }
+        type: 'FeatureCollection',
+        features: [
+          // North: everything above CONUS
+          { type: 'Feature', geometry: { type: 'Polygon', coordinates: [[[-170, 49.5], [0, 49.5], [0, 80], [-170, 80], [-170, 49.5]]] }},
+          // South: everything below CONUS
+          { type: 'Feature', geometry: { type: 'Polygon', coordinates: [[[-170, -60], [0, -60], [0, 24.5], [-170, 24.5], [-170, -60]]] }},
+          // West: left side between CONUS lat bands
+          { type: 'Feature', geometry: { type: 'Polygon', coordinates: [[[-170, 24.5], [-125, 24.5], [-125, 49.5], [-170, 49.5], [-170, 24.5]]] }},
+          // East: right side between CONUS lat bands
+          { type: 'Feature', geometry: { type: 'Polygon', coordinates: [[[-66.5, 24.5], [0, 24.5], [0, 49.5], [-66.5, 49.5], [-66.5, 24.5]]] }}
+        ]
       }
     });
 
