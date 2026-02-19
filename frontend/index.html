@@ -1251,9 +1251,7 @@
     <span>Satellite</span>
   </button>
 
-  <div class="layer-divider"></div>
-
-  <button class="layer-btn" data-layer="alerts" title="NWS Alerts" aria-label="Toggle alerts layer" aria-pressed="false">
+  <button class="layer-btn" data-layer="alerts" title="NWS Severe Weather Alerts" aria-label="Toggle alerts layer" aria-pressed="false">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
       <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
     </svg>
@@ -1262,31 +1260,25 @@
 
   <div class="layer-divider"></div>
 
-  <button class="layer-btn active" id="viewToggle" title="Toggle 3D / 2D view (V)" aria-label="Toggle 3D view" aria-pressed="true">
+  <button class="layer-btn active" id="viewToggle" title="Cycle view: Top / Tilt / 3D (V)" aria-label="Cycle view mode">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
       <path d="M12 3L2 9l10 6 10-6-10-6z"/><path d="M2 15l10 6 10-6"/><path d="M2 12l10 6 10-6"/>
     </svg>
-    <span>3D</span>
+    <span>Tilt</span>
   </button>
 
-  <button class="layer-btn" id="elevRadarToggle" title="Elevated Radar (E)" aria-label="Toggle elevated radar" aria-pressed="false">
+  <button class="layer-btn active" id="elevRadarToggle" title="Elevated Radar (E)" aria-label="Toggle elevated radar" aria-pressed="true">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
       <path d="M3 17h18"/><path d="M5 13h14"/><circle cx="12" cy="8" r="4"/><path d="M8.5 6.5a5 5 0 010 3"/><path d="M15.5 6.5a5 5 0 000 3"/>
     </svg>
     <span>Elev</span>
   </button>
 
-  <button class="layer-btn" id="atmosToggle" title="Atmosphere Columns (A)" aria-label="Toggle atmosphere columns" aria-pressed="false">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-      <rect x="4" y="4" width="4" height="16" rx="1"/><rect x="10" y="8" width="4" height="12" rx="1"/><rect x="16" y="2" width="4" height="18" rx="1"/>
-    </svg>
+  <!-- Atmos & X-Sect hidden until atmosphere profile pipeline is fixed -->
+  <button class="layer-btn" id="atmosToggle" title="Atmosphere Columns (A)" aria-label="Toggle atmosphere columns" aria-pressed="false" style="display:none;">
     <span>Atmos</span>
   </button>
-
-  <button class="layer-btn" id="xsectionToggle" title="Cross-Section (X)" aria-label="Draw vertical cross-section" aria-pressed="false">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-      <path d="M4 20V4"/><path d="M4 20h16"/><path d="M6 16l4-6 3 3 5-9"/>
-    </svg>
+  <button class="layer-btn" id="xsectionToggle" title="Cross-Section (X)" aria-label="Draw vertical cross-section" aria-pressed="false" style="display:none;">
     <span>X-Sect</span>
   </button>
 </div>
@@ -1345,14 +1337,7 @@
         <input class="timeline-slider-unified" type="range" min="0" max="70" value="10" id="timeSlider" aria-label="Timeline" aria-valuetext="Now">
         <div class="timeline-label" id="timeLabel">Now</div>
       </div>
-      <div class="timeline-ticks">
-        <span class="timeline-tick">-50m</span>
-        <span class="timeline-tick">-25m</span>
-        <span class="timeline-tick now">NOW</span>
-        <span class="timeline-tick future">+20m</span>
-        <span class="timeline-tick future">+40m</span>
-        <span class="timeline-tick future">+60m</span>
-      </div>
+      <div class="timeline-ticks" id="timelineTicks"></div>
     </div>
   </div>
 </div>
@@ -1444,13 +1429,14 @@
       <div class="help-tip">
         <div class="help-tip-title">Rotate &amp; Tilt the 3D View</div>
         <div class="help-tip-text">
-          <strong>Desktop:</strong> Right-click + drag (or Ctrl + left-click + drag) to rotate and tilt the map. Scroll to zoom.<br>
-          <strong>Mobile:</strong> Two-finger drag to rotate. Pinch to zoom. Two-finger tilt up/down to change the viewing angle.
+          <strong>Desktop:</strong> Right-click + drag to rotate and tilt. Ctrl + left-click + drag also works. Scroll to zoom.<br>
+          <strong>Mobile:</strong> Two-finger drag to rotate. Two-finger tilt up/down to change angle. Pinch to zoom.<br>
+          <strong>Compass:</strong> The compass (bottom-right) shows north. Click it to reset, or drag it to rotate.
         </div>
       </div>
       <div class="help-row">
         <span class="help-key">Click</span>
-        <span class="help-desc">Click any point on the map for a detailed forecast (temperature, wind, precipitation, hourly NWS data)</span>
+        <span class="help-desc">Click any point for a detailed forecast — temperature, wind, precipitation, and hourly NWS data</span>
       </div>
       <div class="help-row">
         <span class="help-key">Scroll</span>
@@ -1459,58 +1445,50 @@
     </div>
 
     <div class="help-section">
-      <div class="help-section-title">Layer Toggles</div>
+      <div class="help-section-title">Weather Layers</div>
       <div class="help-row">
         <span class="help-key">R</span>
-        <span class="help-desc"><strong>Radar</strong> — live MRMS precipitation radar (2-min updates)</span>
+        <span class="help-desc"><strong>Radar</strong> — live MRMS precipitation radar, updates every 2 minutes</span>
       </div>
       <div class="help-row">
         <span class="help-key">T</span>
-        <span class="help-desc"><strong>Temperature</strong> — HRRR 3km forecast color wash</span>
+        <span class="help-desc"><strong>Temperature</strong> — HRRR 3km forecast temperature color wash</span>
       </div>
       <div class="help-row">
         <span class="help-key">W</span>
-        <span class="help-desc"><strong>Wind</strong> — animated wind particles showing speed and direction</span>
+        <span class="help-desc"><strong>Wind</strong> — animated particles showing wind speed and direction</span>
       </div>
       <div class="help-row">
         <span class="help-key">P</span>
-        <span class="help-desc"><strong>Precipitation</strong> — HRRR forecast precipitation overlay</span>
+        <span class="help-desc"><strong>Precipitation</strong> — HRRR forecast precipitation</span>
       </div>
       <div class="help-row">
         <span class="help-key">S</span>
-        <span class="help-desc"><strong>Satellite</strong> — GOES visible imagery</span>
+        <span class="help-desc"><strong>Satellite</strong> — GOES visible imagery from space</span>
       </div>
     </div>
 
     <div class="help-section">
-      <div class="help-section-title">3D &amp; Analysis</div>
+      <div class="help-section-title">View &amp; 3D</div>
       <div class="help-row">
         <span class="help-key">V</span>
-        <span class="help-desc"><strong>3D / 2D</strong> — toggle 3D terrain elevation (Rockies, Appalachians pop up)</span>
+        <span class="help-desc"><strong>View mode</strong> — cycles through Top (flat), Tilt (slight angle with terrain), and 3D (full terrain). Right-click drag to fine-tune the angle.</span>
       </div>
       <div class="help-row">
         <span class="help-key">E</span>
-        <span class="help-desc"><strong>Elevated Radar</strong> — float radar at cloud altitude in 3D mode</span>
-      </div>
-      <div class="help-row">
-        <span class="help-key">A</span>
-        <span class="help-desc"><strong>Atmosphere Columns</strong> — 3D temperature columns from atmosphere data</span>
-      </div>
-      <div class="help-row">
-        <span class="help-key">X</span>
-        <span class="help-desc"><strong>Cross-Section</strong> — click two points to see a vertical slice of the atmosphere</span>
+        <span class="help-desc"><strong>Elevated Radar</strong> — shows a floating radar layer at cloud altitude above the terrain</span>
       </div>
     </div>
 
     <div class="help-section">
-      <div class="help-section-title">Timeline</div>
+      <div class="help-section-title">Timeline (Bottom Bar)</div>
       <div class="help-row">
         <span class="help-key">Space</span>
-        <span class="help-desc"><strong>Play / Pause</strong> — animate past radar frames from -50 minutes to now</span>
+        <span class="help-desc"><strong>Play</strong> — animates from -50 minutes through NOW and into the +60 minute forecast</span>
       </div>
       <div class="help-row">
-        <span class="help-key">Slider</span>
-        <span class="help-desc">Drag left of NOW for past radar, drag right of NOW for future forecast (temperature + precipitation)</span>
+        <span class="help-key">Drag</span>
+        <span class="help-desc"><strong>Slider</strong> — left of NOW shows past radar frames. Right of NOW shows the futurecast: temperature changes and HRRR precipitation forecast overlay. Real times are shown on the ticks.</span>
       </div>
     </div>
 
@@ -1570,7 +1548,7 @@
     zoom: 6,
     maxZoom: 12,
     minZoom: 2,
-    pitch: 60,
+    pitch: 30,
     maxPitch: 80,
     attributionControl: true
   });
@@ -3183,7 +3161,7 @@
   });
 
   // ─── Elevated Radar (120x80 fill-extrusion at cloud altitude) ──────
-  let elevatedRadarOn = false;
+  let elevatedRadarOn = true;
   let elevRadarTimer = null;
 
   function toggleElevatedRadar() {
@@ -3311,22 +3289,30 @@
     elevRadarTimer = setTimeout(updateElevatedRadar, 300);
   });
 
-  // ─── 3D / 2D View Toggle ──────────────────────
-  let is3D = true;
+  // ─── View Mode (3-state: Top / Tilt / 3D) ──────
+  const VIEW_MODES = [
+    { name: 'Top', pitch: 0, terrain: false },
+    { name: 'Tilt', pitch: 30, terrain: true },
+    { name: '3D', pitch: 60, terrain: true }
+  ];
+  let viewMode = 1; // default: Tilt
   const viewToggle = document.getElementById('viewToggle');
 
-  function toggleView() {
-    is3D = !is3D;
-    map.easeTo({ pitch: is3D ? 60 : 0, duration: 600 });
-    map.setTerrain(is3D ? { source: 'dem', exaggeration: 1.5 } : null);
-    viewToggle.classList.toggle('active', is3D);
-    viewToggle.querySelector('span').textContent = is3D ? '3D' : '2D';
-    viewToggle.setAttribute('aria-pressed', String(is3D));
-    viewToggle.setAttribute('aria-label', is3D ? 'Switch to 2D view' : 'Switch to 3D view');
-    announce(`${is3D ? '3D' : '2D'} view`);
+  function setViewMode(mode) {
+    viewMode = mode;
+    const v = VIEW_MODES[viewMode];
+    map.easeTo({ pitch: v.pitch, duration: 600 });
+    map.setTerrain(v.terrain ? { source: 'dem', exaggeration: 1.5 } : null);
+    viewToggle.classList.toggle('active', viewMode > 0);
+    viewToggle.querySelector('span').textContent = v.name;
+    announce(`${v.name} view`);
   }
 
-  viewToggle.addEventListener('click', toggleView);
+  function cycleView() {
+    setViewMode((viewMode + 1) % VIEW_MODES.length);
+  }
+
+  viewToggle.addEventListener('click', cycleView);
 
   // Elevated radar button
   const elevRadarToggle = document.getElementById('elevRadarToggle');
@@ -3592,9 +3578,11 @@
   }
 
   function getTimelineLabel(val) {
-    if (val < 10) return `-${(10 - val) * 5}m`;
     if (val === 10) return 'Now';
-    return `+${val - 10}m`;
+    const offsetMin = val < 10 ? -(10 - val) * 5 : (val - 10);
+    const d = new Date(Date.now() + offsetMin * 60000);
+    const time = formatTime(d);
+    return val < 10 ? `${time} (-${(10 - val) * 5}m)` : `${time} (+${val - 10}m)`;
   }
 
   timeSlider.addEventListener('input', () => {
@@ -3609,14 +3597,14 @@
       if (map.getLayer('precip-forecast-layer')) map.setPaintProperty('precip-forecast-layer', 'raster-opacity', 0);
     } else {
       // Future forecast: slider 11-70 → forecastT 1/60 to 1.0
-      updateRadarFrame(0);
+      updateRadarFrame(0); // show live radar as context
       forecastT = (val - 10) / 60;
       applyForecastInterpolation();
       updateTempLabels();
-      // Crossfade: radar out, HRRR precip in over first 10 minutes of future
+      // Keep radar dimmed as context, overlay HRRR precip forecast on top
       const fadeT = Math.min((val - 10) / 10, 1); // 0→1 over slider 11-20
-      if (map.getLayer('radar-layer')) map.setPaintProperty('radar-layer', 'raster-opacity', 0.7 * (1 - fadeT));
-      if (map.getLayer('precip-forecast-layer')) map.setPaintProperty('precip-forecast-layer', 'raster-opacity', 0.7 * fadeT);
+      if (map.getLayer('radar-layer')) map.setPaintProperty('radar-layer', 'raster-opacity', 0.7 * (1 - fadeT * 0.6)); // dims to 0.28, never fully hidden
+      if (map.getLayer('precip-forecast-layer')) map.setPaintProperty('precip-forecast-layer', 'raster-opacity', 0.5 * fadeT);
     }
     timeLabel.textContent = getTimelineLabel(val);
     timeSlider.setAttribute('aria-valuetext', val === 10 ? 'Now' : val < 10 ? `${(10 - val) * 5} minutes ago` : `+${val - 10} minutes`);
@@ -3632,6 +3620,33 @@
   setTimeout(positionTimeLabel, 100);
   window.addEventListener('resize', positionTimeLabel);
 
+  // Dynamic timeline ticks with real times
+  function formatTime(date) {
+    let h = date.getHours(), m = date.getMinutes();
+    const ampm = h >= 12 ? 'p' : 'a';
+    h = h % 12 || 12;
+    return `${h}:${m.toString().padStart(2, '0')}${ampm}`;
+  }
+
+  function updateTimelineTicks() {
+    const now = new Date();
+    const ticks = document.getElementById('timelineTicks');
+    // Tick positions: -50m, -25m, NOW, +20m, +40m, +60m
+    const offsets = [-50, -25, 0, 20, 40, 60];
+    const labels = offsets.map(off => {
+      if (off === 0) return 'NOW';
+      const d = new Date(now.getTime() + off * 60000);
+      return formatTime(d);
+    });
+    ticks.innerHTML = offsets.map((off, i) => {
+      const cls = off === 0 ? 'timeline-tick now' : off > 0 ? 'timeline-tick future' : 'timeline-tick';
+      return `<span class="${cls}">${labels[i]}</span>`;
+    }).join('');
+  }
+
+  updateTimelineTicks();
+  setInterval(updateTimelineTicks, 60000); // refresh every minute
+
   function updateRadarFrame(radarIdx) {
     if (!map.getSource('radar')) return;
     const product = radarProducts[radarIdx];
@@ -3643,41 +3658,38 @@
   playBtn.addEventListener('click', () => {
     playing = !playing;
     playBtn.setAttribute('aria-pressed', String(playing));
-    playBtn.setAttribute('aria-label', playing ? 'Pause radar animation' : 'Play radar animation');
+    playBtn.setAttribute('aria-label', playing ? 'Pause animation' : 'Play animation');
     if (playing) {
       playBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="3" width="4" height="18"/><rect x="15" y="3" width="4" height="18"/></svg>';
-      // Reset to past, clear any future interpolation
-      forecastT = 0;
-      applyForecastInterpolation();
-      // Restore radar, hide forecast precip
-      if (map.getLayer('radar-layer')) map.setPaintProperty('radar-layer', 'raster-opacity', 0.7);
-      if (map.getLayer('precip-forecast-layer')) map.setPaintProperty('precip-forecast-layer', 'raster-opacity', 0);
-      // Start from oldest (left), play right toward now
       let frame = 0;
       timeSlider.value = frame;
-      updateRadarFrame(sliderToRadarIdx(frame));
-      timeLabel.textContent = getTimelineLabel(frame);
-      positionTimeLabel();
+      timeSlider.dispatchEvent(new Event('input'));
 
-      playInterval = setInterval(() => {
+      function playStep() {
         frame++;
-        if (frame > 10) {
-          // Stop at NOW
-          frame = 10;
+        if (frame <= 10) {
+          // Past radar frames: 500ms per step (5-min jumps)
+          timeSlider.value = frame;
+          timeSlider.dispatchEvent(new Event('input'));
+          playInterval = setTimeout(playStep, 500);
+        } else if (frame <= 70) {
+          // Future forecast: jump by 5 to speed through 60 min
+          timeSlider.value = frame;
+          timeSlider.dispatchEvent(new Event('input'));
+          frame += 4; // next iteration will be +5 total
+          playInterval = setTimeout(playStep, 400);
+        } else {
+          // Done — stop at end
           playing = false;
           playBtn.setAttribute('aria-pressed', 'false');
-          playBtn.setAttribute('aria-label', 'Play radar animation');
+          playBtn.setAttribute('aria-label', 'Play animation');
           playBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>';
-          clearInterval(playInterval);
         }
-        timeSlider.value = frame;
-        updateRadarFrame(sliderToRadarIdx(frame));
-        timeLabel.textContent = getTimelineLabel(frame);
-        positionTimeLabel();
-      }, 500);
+      }
+      playInterval = setTimeout(playStep, 500);
     } else {
       playBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>';
-      clearInterval(playInterval);
+      clearTimeout(playInterval);
     }
   });
 
@@ -4243,6 +4255,8 @@
   // ─── Load Atmosphere on Startup ────────────
   map.on('load', () => {
     loadAtmosphereProfile();
+    // Initial elevated radar (wait for tiles to load)
+    setTimeout(updateElevatedRadar, 2000);
   });
 
   // ─── Help Overlay ──────────────────────────
@@ -4280,7 +4294,7 @@
       case 'w': document.querySelector('[data-layer="wind"]').click(); break;
       case 'p': document.querySelector('[data-layer="precip"]').click(); break;
       case 's': document.querySelector('[data-layer="satellite"]').click(); break;
-      case 'v': toggleView(); break;
+      case 'v': cycleView(); break;
       case 'x': toggleXsectionMode(); break;
       case 'a': toggleAtmosColumns(); atmosToggle.classList.toggle('active', atmosColumnsVisible); atmosToggle.setAttribute('aria-pressed', String(atmosColumnsVisible)); break;
       case 'e': toggleElevatedRadar(); elevRadarToggle.classList.toggle('active', elevatedRadarOn); elevRadarToggle.setAttribute('aria-pressed', String(elevatedRadarOn)); break;
