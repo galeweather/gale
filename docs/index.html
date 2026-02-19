@@ -188,8 +188,8 @@
 
   .locate-inline {
     pointer-events: auto;
-    width: 36px;
     height: 36px;
+    padding: 0 12px;
     border-radius: var(--radius-sm);
     border: 1px solid var(--border-subtle);
     background: var(--bg-panel);
@@ -202,6 +202,7 @@
     flex-shrink: 0;
     transition: all var(--transition);
     box-shadow: var(--shadow-md);
+    gap: 0;
   }
 
   .locate-inline:hover { border-color: var(--accent); color: var(--accent); }
@@ -976,42 +977,95 @@
   /* (locate button moved inline to top bar) */
 
   /* ═══════════════════════════════════════════
-     USER LOCATION DOT
+     USER LOCATION MARKER
      ═══════════════════════════════════════════ */
   .user-location-marker {
-    width: 18px;
-    height: 18px;
-    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    transform: translateY(-50%);
   }
 
-  .user-location-dot {
-    width: 14px;
-    height: 14px;
+  .user-location-tag {
     background: var(--accent);
-    border: 2px solid #fff;
-    border-radius: 50%;
-    position: absolute;
-    top: 2px;
-    left: 2px;
-    z-index: 2;
-    box-shadow: 0 0 6px rgba(56, 189, 248, 0.6);
+    color: #000;
+    font-family: var(--sans);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    padding: 3px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+    margin-bottom: 4px;
+    box-shadow: 0 2px 8px rgba(56, 189, 248, 0.5);
+  }
+
+  .user-location-stem {
+    width: 2px;
+    height: 24px;
+    background: var(--accent);
+    opacity: 0.7;
+  }
+
+  .user-location-arrow {
+    width: 0;
+    height: 0;
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-top: 12px solid var(--accent);
+    filter: drop-shadow(0 2px 6px rgba(56, 189, 248, 0.6));
   }
 
   .user-location-pulse {
-    width: 18px;
-    height: 18px;
-    background: rgba(56, 189, 248, 0.3);
+    width: 24px;
+    height: 24px;
+    background: rgba(56, 189, 248, 0.25);
     border-radius: 50%;
     position: absolute;
-    top: 0;
-    left: 0;
-    z-index: 1;
+    bottom: -6px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: -1;
     animation: loc-pulse 2s ease-out infinite;
   }
 
   @keyframes loc-pulse {
-    0% { transform: scale(1); opacity: 0.6; }
-    100% { transform: scale(3); opacity: 0; }
+    0% { transform: translateX(-50%) scale(1); opacity: 0.5; }
+    100% { transform: translateX(-50%) scale(4); opacity: 0; }
+  }
+
+  /* Click marker (point forecast) */
+  .click-marker {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    transform: translateY(-50%);
+  }
+
+  .click-marker-dot {
+    width: 10px;
+    height: 10px;
+    background: #f59e0b;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    box-shadow: 0 0 8px rgba(245, 158, 11, 0.6);
+  }
+
+  .click-marker-ring {
+    width: 22px;
+    height: 22px;
+    border: 2px solid rgba(245, 158, 11, 0.5);
+    border-radius: 50%;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    animation: click-ring 1.5s ease-out infinite;
+  }
+
+  @keyframes click-ring {
+    0% { transform: translate(-50%, -50%) scale(1); opacity: 0.6; }
+    100% { transform: translate(-50%, -50%) scale(2.5); opacity: 0; }
   }
 
   /* ═══════════════════════════════════════════
@@ -1183,9 +1237,10 @@
   </div>
 
   <button class="locate-inline" id="locateBtn" title="My location" aria-label="Locate me on the map">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <circle cx="12" cy="12" r="3"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/>
     </svg>
+    <span style="font-size:11px;font-weight:600;margin-left:4px">My Location</span>
   </button>
 
   <div class="search-container" id="searchContainer">
@@ -2240,6 +2295,87 @@
       }
     });
 
+    // County boundaries — subtle shading from OpenFreeMap vector tiles
+    map.addLayer({
+      id: 'county-borders',
+      type: 'line',
+      source: 'labels',
+      'source-layer': 'boundary',
+      filter: ['all', ['==', 'admin_level', 6], ['!has', 'maritime']],
+      minzoom: 5,
+      paint: {
+        'line-color': 'rgba(255, 255, 255, 0.12)',
+        'line-width': [
+          'interpolate', ['linear'], ['zoom'],
+          5, 0.3,
+          8, 0.8,
+          12, 1.2
+        ],
+        'line-opacity': [
+          'interpolate', ['linear'], ['zoom'],
+          5, 0, 6, 1
+        ]
+      }
+    });
+
+    // Major roads — motorway, trunk, primary from OpenFreeMap
+    map.addLayer({
+      id: 'roads-major',
+      type: 'line',
+      source: 'labels',
+      'source-layer': 'transportation',
+      filter: ['in', 'class', 'motorway', 'trunk', 'primary'],
+      minzoom: 5,
+      layout: {
+        'line-cap': 'round',
+        'line-join': 'round'
+      },
+      paint: {
+        'line-color': [
+          'match', ['get', 'class'],
+          'motorway', 'rgba(255, 170, 56, 0.2)',
+          'trunk', 'rgba(255, 170, 56, 0.15)',
+          'rgba(255, 255, 255, 0.1)'
+        ],
+        'line-width': [
+          'interpolate', ['linear'], ['zoom'],
+          5, 0.3,
+          8, 1,
+          12, 2
+        ],
+        'line-opacity': [
+          'interpolate', ['linear'], ['zoom'],
+          5, 0, 6, 1
+        ]
+      }
+    });
+
+    // Secondary roads (zoom 8+)
+    map.addLayer({
+      id: 'roads-secondary',
+      type: 'line',
+      source: 'labels',
+      'source-layer': 'transportation',
+      filter: ['==', 'class', 'secondary'],
+      minzoom: 8,
+      layout: {
+        'line-cap': 'round',
+        'line-join': 'round'
+      },
+      paint: {
+        'line-color': 'rgba(255, 255, 255, 0.08)',
+        'line-width': [
+          'interpolate', ['linear'], ['zoom'],
+          8, 0.3,
+          12, 1
+        ],
+        'line-opacity': [
+          'interpolate', ['linear'], ['zoom'],
+          8, 0, 9, 1
+        ]
+      }
+    });
+
     // Temperature labels — shows current temp at key cities
     map.addSource('temp-labels', {
       type: 'geojson',
@@ -2375,6 +2511,27 @@
       map.addImage('precip-snow', { width: size, height: size, data: sc.getImageData(0, 0, size, size).data });
     })();
 
+    // Label stem icon — vertical line with dot at bottom for 3D label pins
+    (() => {
+      const w = 4, h = 40;
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      const ctx = c.getContext('2d');
+      // Vertical line
+      ctx.strokeStyle = 'rgba(148, 163, 184, 0.5)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(w / 2, 0);
+      ctx.lineTo(w / 2, h - 4);
+      ctx.stroke();
+      // Small dot at bottom
+      ctx.fillStyle = 'rgba(148, 163, 184, 0.6)';
+      ctx.beginPath();
+      ctx.arc(w / 2, h - 2, 2, 0, Math.PI * 2);
+      ctx.fill();
+      map.addImage('label-stem', { width: w, height: h, data: ctx.getImageData(0, 0, w, h).data });
+    })();
+
     // Precipitation labels — shows precip amounts at grid points
     map.addSource('precip-labels', {
       type: 'geojson',
@@ -2435,7 +2592,9 @@
         'text-transform': 'uppercase',
         'text-letter-spacing': 0.1,
         'text-allow-overlap': false,
-        'text-padding': 4
+        'text-padding': 4,
+        'text-pitch-alignment': 'viewport',
+        'text-rotation-alignment': 'viewport'
       },
       paint: {
         'text-color': '#94a3b8',
@@ -2463,7 +2622,14 @@
           3, 12, 10, 18
         ],
         'text-allow-overlap': false,
-        'text-padding': 4
+        'text-padding': 4,
+        'text-pitch-alignment': 'viewport',
+        'text-rotation-alignment': 'viewport',
+        'icon-image': 'label-stem',
+        'icon-anchor': 'top',
+        'icon-size': 0.6,
+        'text-anchor': 'bottom',
+        'text-offset': [0, -0.8]
       },
       paint: {
         'text-color': '#e2e8f0',
@@ -2471,6 +2637,10 @@
         'text-opacity': [
           'interpolate', ['linear'], ['zoom'],
           3, 0, 4, 1
+        ],
+        'icon-opacity': [
+          'interpolate', ['linear'], ['zoom'],
+          3, 0, 4, 0.5
         ]
       }
     });
@@ -2491,7 +2661,14 @@
           4, 11, 10, 15
         ],
         'text-allow-overlap': false,
-        'text-padding': 4
+        'text-padding': 4,
+        'text-pitch-alignment': 'viewport',
+        'text-rotation-alignment': 'viewport',
+        'icon-image': 'label-stem',
+        'icon-anchor': 'top',
+        'icon-size': 0.5,
+        'text-anchor': 'bottom',
+        'text-offset': [0, -0.6]
       },
       paint: {
         'text-color': '#e2e8f0',
@@ -2499,6 +2676,10 @@
         'text-opacity': [
           'interpolate', ['linear'], ['zoom'],
           4, 0, 5, 1
+        ],
+        'icon-opacity': [
+          'interpolate', ['linear'], ['zoom'],
+          4, 0, 5, 0.5
         ]
       }
     });
@@ -2516,7 +2697,14 @@
         'text-font': ['Noto Sans Regular'],
         'text-size': 11,
         'text-allow-overlap': false,
-        'text-padding': 4
+        'text-padding': 4,
+        'text-pitch-alignment': 'viewport',
+        'text-rotation-alignment': 'viewport',
+        'icon-image': 'label-stem',
+        'icon-anchor': 'top',
+        'icon-size': 0.4,
+        'text-anchor': 'bottom',
+        'text-offset': [0, -0.5]
       },
       paint: {
         'text-color': '#cbd5e1',
@@ -2524,6 +2712,10 @@
         'text-opacity': [
           'interpolate', ['linear'], ['zoom'],
           7, 0, 8, 1
+        ],
+        'icon-opacity': [
+          'interpolate', ['linear'], ['zoom'],
+          7, 0, 8, 0.4
         ]
       }
     });
@@ -3457,6 +3649,7 @@
     // Only fetch forecast for CONUS
     if (lat < 24 || lat > 50 || lng < -125 || lng > -66) return;
 
+    setClickMarker(lng, lat);
     document.getElementById('forecastLocation').textContent = 'Loading...';
     document.getElementById('forecastCoords').textContent = `${lat.toFixed(4)}°N, ${Math.abs(lng).toFixed(4)}°W`;
     document.getElementById('forecastTemp').innerHTML = '—<span>°F</span>';
@@ -3545,6 +3738,7 @@
   document.getElementById('forecastClose').addEventListener('click', () => {
     drawer.classList.remove('open');
     drawer.setAttribute('aria-hidden', 'true');
+    clearClickMarker();
   });
 
   // ─── Unified Timeline ──────────────────────────
@@ -3747,13 +3941,26 @@
 
   // ─── Locate Me ──────────────────────────────
   let userLocationMarker = null;
+  let clickMarker = null;
 
   function setUserLocationMarker(lng, lat) {
     if (userLocationMarker) userLocationMarker.remove();
     const el = document.createElement('div');
     el.className = 'user-location-marker';
-    el.innerHTML = '<div class="user-location-pulse"></div><div class="user-location-dot"></div>';
-    userLocationMarker = new maplibregl.Marker({ element: el }).setLngLat([lng, lat]).addTo(map);
+    el.innerHTML = '<div class="user-location-tag">YOUR LOCATION</div><div class="user-location-stem"></div><div class="user-location-arrow"></div><div class="user-location-pulse"></div>';
+    userLocationMarker = new maplibregl.Marker({ element: el, anchor: 'bottom' }).setLngLat([lng, lat]).addTo(map);
+  }
+
+  function setClickMarker(lng, lat) {
+    if (clickMarker) clickMarker.remove();
+    const el = document.createElement('div');
+    el.className = 'click-marker';
+    el.innerHTML = '<div class="click-marker-ring"></div><div class="click-marker-dot"></div>';
+    clickMarker = new maplibregl.Marker({ element: el }).setLngLat([lng, lat]).addTo(map);
+  }
+
+  function clearClickMarker() {
+    if (clickMarker) { clickMarker.remove(); clickMarker = null; }
   }
 
   function doLocate() {
