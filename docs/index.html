@@ -1880,7 +1880,7 @@
   // ─── Wind Particle System (WebGL) ─────────────────
   const PARTICLE_RES = window.innerWidth < 640 ? 128 : 512;
   const PARTICLE_COUNT = PARTICLE_RES * PARTICLE_RES;
-  const FADE_OPACITY = window.innerWidth < 640 ? 0.990 : 0.994;
+  const FADE_OPACITY = window.innerWidth < 640 ? 0.978 : 0.985;
   let windParticleLayer = null;
 
   function glShader(gl, type, src) {
@@ -2212,7 +2212,7 @@
         gl.uniform2f(gl.getUniformLocation(upProg, 'u_wind_min'), WB.x0, WB.y0);
         gl.uniform2f(gl.getUniformLocation(upProg, 'u_wind_max'), WB.x1, WB.y1);
         gl.uniform1f(gl.getUniformLocation(upProg, 'u_speed_factor'), 0.00003);
-        gl.uniform1f(gl.getUniformLocation(upProg, 'u_drop_rate'), 0.003);
+        gl.uniform1f(gl.getUniformLocation(upProg, 'u_drop_rate'), 0.005);
         gl.uniform1f(gl.getUniformLocation(upProg, 'u_drop_rate_bump'), 0.0001);
         gl.uniform1f(gl.getUniformLocation(upProg, 'u_rand_seed'), Math.random());
 
