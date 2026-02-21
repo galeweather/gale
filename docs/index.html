@@ -2311,8 +2311,9 @@
         // Pass 4: Composite onto MapLibre's framebuffer
         // Fade particles out when zoomed out so radar is visible
         const zoom = mapR.getZoom();
-        const zoomOpacity = Math.min(0.7, Math.max(0.0, (zoom - 2) / 6));
-        const fadeIn = Math.min(1.0, (performance.now() - windLoadedTime) / 1500);
+        const zoomOpacity = Math.min(0.4, Math.max(0.0, (zoom - 2) / 6));
+        const elapsed = performance.now() - windLoadedTime;
+        const fadeIn = Math.min(1.0, elapsed / 4000);
         gl.bindFramebuffer(gl.FRAMEBUFFER, prevFBO);
         gl.viewport(0, 0, cw, ch);
         gl.enable(gl.BLEND);
@@ -2320,7 +2321,7 @@
         gl.useProgram(scProg);
         glBind(gl, nxtS, 0);
         gl.uniform1i(gl.getUniformLocation(scProg, 'u_screen'), 0);
-        gl.uniform1f(gl.getUniformLocation(scProg, 'u_opacity'), cameraMoving ? 0.0 : zoomOpacity * fadeIn);
+        gl.uniform1f(gl.getUniformLocation(scProg, 'u_opacity'), zoomOpacity * fadeIn);
         drawQuad(gl, scProg);
 
         sIdx = 1 - sIdx;
