@@ -2226,7 +2226,6 @@
         map.on('movestart', () => { cameraMoving = true; });
         map.on('moveend', () => {
           cameraMoving = false; clearTrails();
-          windLoadedTime = performance.now();
           redistributeToViewport();
           map.triggerRepaint();
         });
@@ -2312,8 +2311,6 @@
         // Fade particles out when zoomed out so radar is visible
         const zoom = mapR.getZoom();
         const zoomOpacity = Math.min(0.4, Math.max(0.0, (zoom - 2) / 6));
-        const elapsed = performance.now() - windLoadedTime;
-        const fadeIn = Math.min(1.0, elapsed / 4000);
         gl.bindFramebuffer(gl.FRAMEBUFFER, prevFBO);
         gl.viewport(0, 0, cw, ch);
         gl.enable(gl.BLEND);
@@ -2321,7 +2318,7 @@
         gl.useProgram(scProg);
         glBind(gl, nxtS, 0);
         gl.uniform1i(gl.getUniformLocation(scProg, 'u_screen'), 0);
-        gl.uniform1f(gl.getUniformLocation(scProg, 'u_opacity'), zoomOpacity * fadeIn);
+        gl.uniform1f(gl.getUniformLocation(scProg, 'u_opacity'), zoomOpacity);
         drawQuad(gl, scProg);
 
         sIdx = 1 - sIdx;
