@@ -2320,7 +2320,7 @@
         gl.useProgram(scProg);
         glBind(gl, nxtS, 0);
         gl.uniform1i(gl.getUniformLocation(scProg, 'u_screen'), 0);
-        gl.uniform1f(gl.getUniformLocation(scProg, 'u_opacity'), zoomOpacity * fadeIn);
+        gl.uniform1f(gl.getUniformLocation(scProg, 'u_opacity'), cameraMoving ? 0.0 : zoomOpacity * fadeIn);
         drawQuad(gl, scProg);
 
         sIdx = 1 - sIdx;
