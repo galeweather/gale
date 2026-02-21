@@ -1880,7 +1880,7 @@
   // ─── Wind Particle System (WebGL) ─────────────────
   const PARTICLE_RES = window.innerWidth < 640 ? 128 : 512;
   const PARTICLE_COUNT = PARTICLE_RES * PARTICLE_RES;
-  const FADE_OPACITY = window.innerWidth < 640 ? 0.990 : 0.996;
+  const FADE_OPACITY = window.innerWidth < 640 ? 0.978 : 0.985;
   let windParticleLayer = null;
 
   function glShader(gl, type, src) {
@@ -2029,10 +2029,13 @@
     precision mediump float;
     uniform sampler2D u_screen;
     uniform float u_opacity;
+    uniform float u_floor;
     varying vec2 v_tex;
     void main() {
       vec4 c = texture2D(u_screen, v_tex);
-      gl_FragColor = vec4(c.rgb, c.a * u_opacity);
+      float faded = c.a * u_opacity;
+      float fl = c.a > 0.01 ? u_floor : 0.0;
+      gl_FragColor = vec4(c.rgb, max(faded, fl));
     }`;
 
   function createWindParticleLayer() {
@@ -2276,6 +2279,7 @@
         glBind(gl, curS, 0);
         gl.uniform1i(gl.getUniformLocation(scProg, 'u_screen'), 0);
         gl.uniform1f(gl.getUniformLocation(scProg, 'u_opacity'), cameraMoving ? 0.0 : FADE_OPACITY);
+        gl.uniform1f(gl.getUniformLocation(scProg, 'u_floor'), cameraMoving ? 0.0 : 0.15);
         drawQuad(gl, scProg);
 
         // Pass 3: Draw particles onto faded trail
