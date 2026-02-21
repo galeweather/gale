@@ -1969,7 +1969,9 @@
         }
       }
       float spd = length(wind);
-      vec2 npos = pos + wind * u_speed_factor;
+      vec2 dir = spd > 0.001 ? wind / spd : vec2(0.0);
+      float scaledSpd = sqrt(spd);
+      vec2 npos = pos + dir * scaledSpd * u_speed_factor;
       float drop = spd < 0.5 ? 1.0 : u_drop_rate + spd * u_drop_rate_bump;
       vec2 seed = pos + u_rand_seed;
       vec2 respawn = vec2(
@@ -2255,7 +2257,7 @@
         gl.uniform1i(gl.getUniformLocation(upProg, 'u_wind_v'), 2);
         gl.uniform2f(gl.getUniformLocation(upProg, 'u_wind_min'), WB.x0, WB.y0);
         gl.uniform2f(gl.getUniformLocation(upProg, 'u_wind_max'), WB.x1, WB.y1);
-        gl.uniform1f(gl.getUniformLocation(upProg, 'u_speed_factor'), 0.000002);
+        gl.uniform1f(gl.getUniformLocation(upProg, 'u_speed_factor'), 0.000025);
         gl.uniform1f(gl.getUniformLocation(upProg, 'u_drop_rate'), 0.003);
         gl.uniform1f(gl.getUniformLocation(upProg, 'u_drop_rate_bump'), 0.0001);
         gl.uniform1f(gl.getUniformLocation(upProg, 'u_rand_seed'), Math.random());
