@@ -1880,7 +1880,7 @@
   // ─── Wind Particle System (WebGL) ─────────────────
   const PARTICLE_RES = window.innerWidth < 640 ? 128 : 512;
   const PARTICLE_COUNT = PARTICLE_RES * PARTICLE_RES;
-  const FADE_OPACITY = window.innerWidth < 640 ? 0.986 : 0.992;
+  const FADE_OPACITY = window.innerWidth < 640 ? 0.990 : 0.996;
   let windParticleLayer = null;
 
   function glShader(gl, type, src) {
@@ -2306,8 +2306,8 @@
         // Pass 4: Composite onto MapLibre's framebuffer
         // Fade particles out when zoomed out so radar is visible
         const zoom = mapR.getZoom();
-        const zoomOpacity = Math.min(0.75, Math.max(0.3, (zoom - 2) / 6));
-        const fadeIn = Math.min(1.0, (performance.now() - windLoadedTime) / 1500);
+        const zoomOpacity = Math.min(0.55, Math.max(0.1, (zoom - 2) / 8));
+        const fadeIn = Math.min(1.0, (performance.now() - windLoadedTime) / 3000);
         gl.bindFramebuffer(gl.FRAMEBUFFER, prevFBO);
         gl.viewport(0, 0, cw, ch);
         gl.enable(gl.BLEND);
