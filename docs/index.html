@@ -2279,7 +2279,7 @@
         gl.viewport(0, 0, cw, ch);
         glBind(gl, curS, 0);
         gl.uniform1i(gl.getUniformLocation(scProg, 'u_screen'), 0);
-        gl.uniform1f(gl.getUniformLocation(scProg, 'u_opacity'), cameraMoving ? 0.0 : FADE_OPACITY);
+        gl.uniform1f(gl.getUniformLocation(scProg, 'u_opacity'), 0.0);
         gl.uniform1f(gl.getUniformLocation(scProg, 'u_floor'), 0.0);
         drawQuad(gl, scProg);
 
