@@ -9,3 +9,4 @@ scripts/hrrr_vgrd.*
 scripts/hrrr_wspd.*
 scripts/hrrr_apcp.*
 .DS_Store
+__pycache__/
