@@ -1882,7 +1882,7 @@
   // ─── Wind Particle System (WebGL) ─────────────────
   const PARTICLE_RES = window.innerWidth < 640 ? 64 : 128;
   const PARTICLE_COUNT = PARTICLE_RES * PARTICLE_RES;
-  const FADE_OPACITY = window.innerWidth < 640 ? 0.97 : 0.985;
+  const FADE_OPACITY = window.innerWidth < 640 ? 0.93 : 0.96;
   let windParticleLayer = null;
 
   function glShader(gl, type, src) {
@@ -2013,7 +2013,7 @@
         }
       }
       gl_Position = u_matrix * vec4(pos, 0.0, 1.0);
-      gl_PointSize = clamp(1.0 + v_speed * 0.12, 1.0, 3.5);
+      gl_PointSize = clamp(1.0 + v_speed * 0.05, 1.0, 2.0);
     }`;
 
   const W_DRAW_FS = `
@@ -2026,7 +2026,7 @@
       if (dot(pc, pc) > 0.25) discard;
       float t = clamp(v_speed / 40.0, 0.0, 1.0);
       vec4 c = texture2D(u_color_ramp, vec2(t, 0.5));
-      gl_FragColor = vec4(c.rgb * 1.2, c.a);
+      gl_FragColor = vec4(c.rgb, c.a * 0.85);
     }`;
 
   const W_SCREEN_FS = `
@@ -2260,8 +2260,8 @@
         gl.uniform2f(gl.getUniformLocation(upProg, 'u_wind_min'), WB.x0, WB.y0);
         gl.uniform2f(gl.getUniformLocation(upProg, 'u_wind_max'), WB.x1, WB.y1);
         gl.uniform1f(gl.getUniformLocation(upProg, 'u_speed_factor'), 0.000012);
-        gl.uniform1f(gl.getUniformLocation(upProg, 'u_drop_rate'), 0.003);
-        gl.uniform1f(gl.getUniformLocation(upProg, 'u_drop_rate_bump'), 0.0001);
+        gl.uniform1f(gl.getUniformLocation(upProg, 'u_drop_rate'), 0.01);
+        gl.uniform1f(gl.getUniformLocation(upProg, 'u_drop_rate_bump'), 0.001);
         gl.uniform1f(gl.getUniformLocation(upProg, 'u_rand_seed'), Math.random());
         const vb = getViewBounds();
         gl.uniform2f(gl.getUniformLocation(upProg, 'u_view_min'), vb.minX, vb.minY);
@@ -2283,7 +2283,7 @@
         glBind(gl, curS, 0);
         gl.uniform1i(gl.getUniformLocation(scProg, 'u_screen'), 0);
         gl.uniform1f(gl.getUniformLocation(scProg, 'u_opacity'), FADE_OPACITY);
-        gl.uniform1f(gl.getUniformLocation(scProg, 'u_floor'), 0.15);
+        gl.uniform1f(gl.getUniformLocation(scProg, 'u_floor'), 0.0);
         drawQuad(gl, scProg);
 
         // Pass 3: Draw particles onto faded trail
@@ -2357,7 +2357,7 @@
       maxzoom: 15,
       encoding: 'terrarium'
     });
-    map.setTerrain({ source: 'dem', exaggeration: 1.5 });
+    // Terrain enabled on demand via Tilt/3D view buttons (default is 2D flat)
 
     // Temperature color wash — HRRR tiles from R2 (CONUS mask hides NODATA edges)
     map.addSource('temperature-tiles', {
