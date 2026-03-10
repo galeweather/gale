@@ -2046,41 +2046,119 @@
     let wuTex, wvTex, crTex, pTex0, pTex1, sTex0, sTex1;
     let qBuf, iBuf, fbo;
     let pIdx = 0, sIdx = 0, mapR, glR, cw = 0, ch = 0;
-    const WB = { x0: 1/8, y0: 2/8, x1: 3/8, y1: 4/8 };
+    // Dynamic wind texture bounds — updated when tiles reload
+    let WB = { x0: 1/8, y0: 2/8, x1: 3/8, y1: 4/8 };
+    let currentWindTileKey = ''; // cache key to avoid redundant reloads
+    let windReloadTimer = null;
 
-    function loadWind(gl) {
-      const tiles = [{x:1,y:2},{x:2,y:2},{x:1,y:3},{x:2,y:3}];
+    // Convert lat/lng to Mercator [0,1] coordinates
+    const toMercX = lng => (lng + 180) / 360;
+    const toMercY = lat => {
+      const r = lat * Math.PI / 180;
+      return (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2;
+    };
+
+    // Get tile coverage for viewport at given zoom level
+    function getTileCoverage(bounds, tileZoom) {
+      const gridSize = Math.pow(2, tileZoom);
+      const west = bounds.getWest(), east = bounds.getEast();
+      const north = bounds.getNorth(), south = bounds.getSouth();
+      const x0 = Math.max(0, Math.floor(toMercX(west) * gridSize));
+      const x1 = Math.min(gridSize - 1, Math.floor(toMercX(east) * gridSize));
+      const y0 = Math.max(0, Math.floor(toMercY(north) * gridSize));
+      const y1 = Math.min(gridSize - 1, Math.floor(toMercY(south) * gridSize));
+      const tiles = [];
+      for (let y = y0; y <= y1; y++)
+        for (let x = x0; x <= x1; x++)
+          tiles.push({ x, y, z: tileZoom });
+      return { tiles, x0, y0, x1, y1, gridSize };
+    }
+
+    function loadWind(gl, tileZoom) {
+      if (!mapR) {
+        // Fallback: load zoom-3 CONUS tiles (initial load before map ready)
+        tileZoom = 3;
+      }
+      // Determine tile coverage
+      let coverage;
+      if (tileZoom === 3 && !mapR) {
+        // Hardcoded CONUS coverage at zoom 3
+        coverage = {
+          tiles: [{x:1,y:2,z:3},{x:2,y:2,z:3},{x:1,y:3,z:3},{x:2,y:3,z:3}],
+          x0: 1, y0: 2, x1: 2, y1: 3, gridSize: 8
+        };
+      } else {
+        const bounds = mapR.getBounds();
+        coverage = getTileCoverage(bounds, tileZoom);
+      }
+      const { tiles, x0, y0, x1, y1, gridSize } = coverage;
+      if (tiles.length === 0) return;
+
+      // Cache key — skip reload if same tiles
+      const key = `${tileZoom}:${x0},${y0}-${x1},${y1}`;
+      if (key === currentWindTileKey && windLoaded) return;
+      currentWindTileKey = key;
+
+      // Update texture bounds in Mercator [0,1] space
+      WB = { x0: x0 / gridSize, y0: y0 / gridSize, x1: (x1 + 1) / gridSize, y1: (y1 + 1) / gridSize };
+
+      const cols = x1 - x0 + 1, rows = y1 - y0 + 1;
+      const canW = cols * 256, canH = rows * 256;
       const can = document.createElement('canvas');
-      can.width = 512; can.height = 512;
+      can.width = canW; can.height = canH;
       const cx = can.getContext('2d');
+
       function stitch(layer) {
         return new Promise(res => {
-          let n = 0; const imgs = [];
-          tiles.forEach((c, i) => {
+          let n = 0; const imgs = new Array(tiles.length);
+          tiles.forEach((t, i) => {
             const img = new Image(); img.crossOrigin = 'anonymous';
-            img.onload = () => { imgs[i] = img; if (++n === 4) finish(); };
-            img.onerror = () => { imgs[i] = null; if (++n === 4) finish(); };
-            img.src = `${TILE_BASE}/${layer}/3/${c.x}/${c.y}.png`;
+            img.onload = () => { imgs[i] = img; if (++n === tiles.length) finish(); };
+            img.onerror = () => { imgs[i] = null; if (++n === tiles.length) finish(); };
+            img.src = `${TILE_BASE}/${layer}/${t.z}/${t.x}/${t.y}.png`;
           });
           function finish() {
-            if (imgs.some(v => !v)) { res(null); return; }
-            cx.clearRect(0, 0, 512, 512);
-            cx.drawImage(imgs[0], 0, 0);     cx.drawImage(imgs[1], 256, 0);
-            cx.drawImage(imgs[2], 0, 256);   cx.drawImage(imgs[3], 256, 256);
-            res(cx.getImageData(0, 0, 512, 512));
+            cx.clearRect(0, 0, canW, canH);
+            tiles.forEach((t, i) => {
+              if (!imgs[i]) return; // skip failed tiles gracefully
+              const dx = (t.x - x0) * 256, dy = (t.y - y0) * 256;
+              cx.drawImage(imgs[i], dx, dy);
+            });
+            res(cx.getImageData(0, 0, canW, canH));
           }
         });
       }
       Promise.all([stitch('wind-u'), stitch('wind-v')]).then(([uD, vD]) => {
         if (!uD || !vD) { console.warn('Wind particles: U/V tiles not available'); return; }
         gl.bindTexture(gl.TEXTURE_2D, wuTex);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 512, 512, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(uD.data.buffer));
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, canW, canH, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(uD.data.buffer));
         gl.bindTexture(gl.TEXTURE_2D, wvTex);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 512, 512, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(vD.data.buffer));
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, canW, canH, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(vD.data.buffer));
         windLoaded = true;
         windLoadedTime = performance.now();
+        clearTrails();
+        redistributeToViewport();
         if (mapR) mapR.triggerRepaint();
       });
+    }
+
+    // Choose wind tile zoom based on map zoom
+    function getWindTileZoom() {
+      if (!mapR) return 3;
+      const z = mapR.getZoom();
+      return Math.min(6, Math.max(3, Math.floor(z)));
+    }
+
+    // Reload wind tiles if viewport coverage changed
+    function checkWindReload() {
+      if (!glR || !mapR) return;
+      const tileZoom = getWindTileZoom();
+      const bounds = mapR.getBounds();
+      const coverage = getTileCoverage(bounds, tileZoom);
+      const key = `${tileZoom}:${coverage.x0},${coverage.y0}-${coverage.x1},${coverage.y1}`;
+      if (key !== currentWindTileKey) {
+        loadWind(glR, tileZoom);
+      }
     }
 
     function makeRamp(gl) {
@@ -2130,16 +2208,11 @@
     function getViewBounds() {
       if (!mapR) return { minX: WB.x0, minY: WB.y0, maxX: WB.x1, maxY: WB.y1 };
       const b = mapR.getBounds();
-      const toX = lng => (lng + 180) / 360;
-      const toY = lat => {
-        const r = lat * Math.PI / 180;
-        return (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2;
-      };
       return {
-        minX: Math.max(WB.x0, Math.min(WB.x1, toX(b.getWest()))),
-        maxX: Math.max(WB.x0, Math.min(WB.x1, toX(b.getEast()))),
-        minY: Math.max(WB.y0, Math.min(WB.y1, toY(b.getNorth()))),
-        maxY: Math.max(WB.y0, Math.min(WB.y1, toY(b.getSouth())))
+        minX: Math.max(WB.x0, Math.min(WB.x1, toMercX(b.getWest()))),
+        maxX: Math.max(WB.x0, Math.min(WB.x1, toMercX(b.getEast()))),
+        minY: Math.max(WB.y0, Math.min(WB.y1, toMercY(b.getNorth()))),
+        maxY: Math.max(WB.y0, Math.min(WB.y1, toMercY(b.getSouth())))
       };
     }
 
@@ -2229,10 +2302,13 @@
         map.on('moveend', () => {
           cameraMoving = false; clearTrails();
           redistributeToViewport();
+          // Debounced wind tile reload on zoom/pan
+          clearTimeout(windReloadTimer);
+          windReloadTimer = setTimeout(checkWindReload, 200);
           map.triggerRepaint();
         });
 
-        loadWind(gl);
+        loadWind(gl, 3);
       },
 
       render(gl, matrix) {
@@ -2318,11 +2394,10 @@
         gl.disableVertexAttribArray(aIdx);
 
         // Pass 4: Composite onto MapLibre's framebuffer
-        // Fade particles out when zoomed out so radar is visible
-        // Visible at state level (z5-z7), fade out when zoomed in past data resolution
+        // Gentle fade-in from z3 (too zoomed out = particles too tiny)
+        // No fade-out — viewport-resolution tiles provide detail at all zoom levels
         const fadeIn = Math.min(1, Math.max(0, (zoom - 3) / 3));   // 0 at z3, 1 at z6
-        const fadeOut = Math.min(1, Math.max(0, (8 - zoom) / 2));  // 1 at z6, 0 at z8
-        const zoomOpacity = 0.55 * fadeIn * fadeOut;
+        const zoomOpacity = 0.55 * fadeIn;
         gl.bindFramebuffer(gl.FRAMEBUFFER, prevFBO);
         gl.viewport(0, 0, cw, ch);
         gl.enable(gl.BLEND);
@@ -2350,7 +2425,7 @@
       },
 
       reloadWind() {
-        if (glR) { windLoaded = false; loadWind(glR); }
+        if (glR) { windLoaded = false; currentWindTileKey = ''; loadWind(glR, getWindTileZoom()); }
       }
     };
   }
