@@ -118,8 +118,8 @@ Would be cleaner but drops Safari < 15 support. Canvas stitch works everywhere.
 ## Status
 - [x] Plan written (2026-03-09)
 - [x] Quick fix deployed: fade particles out past z7 (temporary)
-- [ ] Phase 1: Generalize loadWind()
-- [ ] Phase 2: Dynamic shader bounds
-- [ ] Phase 3: Zoom/pan trigger
-- [ ] Phase 4: Remove fade hack
-- [ ] Phase 5: Caching + performance
+- [x] Phase 1: Generalize loadWind() (2026-03-09)
+- [x] Phase 2: Dynamic shader bounds (2026-03-09)
+- [x] Phase 3: Zoom/pan trigger (2026-03-09)
+- [x] Phase 4: Remove fade hack (2026-03-09)
+- [ ] Phase 5: Caching + performance (deferred — test first)
