@@ -1984,10 +1984,14 @@
       gl_FragColor = encode((rand(seed) < drop || oob) ? respawn : npos);
     }`;
 
+  // Draw shader: each particle is a LINE from previous position to current position
+  // Two vertices per particle: a_endpoint=0 (prev pos) and a_endpoint=1 (curr pos)
   const W_DRAW_VS = `
     precision highp float;
     attribute float a_index;
-    uniform sampler2D u_particles;
+    attribute float a_endpoint;
+    uniform sampler2D u_particles_curr;
+    uniform sampler2D u_particles_prev;
     uniform sampler2D u_wind_u;
     uniform sampler2D u_wind_v;
     uniform float u_particles_res;
@@ -1995,13 +1999,16 @@
     uniform vec2 u_wind_max;
     uniform mat4 u_matrix;
     varying float v_speed;
+    varying float v_alpha;
     vec2 decode(vec4 c) { return vec2(c.r + c.g / 255.0, c.b + c.a / 255.0); }
     void main() {
       float y = floor(a_index / u_particles_res);
       float x = a_index - y * u_particles_res;
       vec2 uv = (vec2(x, y) + 0.5) / u_particles_res;
-      vec2 pos = decode(texture2D(u_particles, uv));
-      vec2 wuv = (pos - u_wind_min) / (u_wind_max - u_wind_min);
+      vec2 curr = decode(texture2D(u_particles_curr, uv));
+      vec2 prev = decode(texture2D(u_particles_prev, uv));
+      vec2 pos = mix(prev, curr, a_endpoint);
+      vec2 wuv = (curr - u_wind_min) / (u_wind_max - u_wind_min);
       v_speed = 0.0;
       if (wuv.x >= 0.0 && wuv.x <= 1.0 && wuv.y >= 0.0 && wuv.y <= 1.0) {
         vec4 uSamp = texture2D(u_wind_u, wuv);
@@ -2012,21 +2019,20 @@
           v_speed = length(vec2(u, v));
         }
       }
+      v_alpha = a_endpoint * 0.8 + 0.2;
       gl_Position = u_matrix * vec4(pos, 0.0, 1.0);
-      gl_PointSize = clamp(1.0 + v_speed * 0.05, 1.0, 2.0);
     }`;
 
   const W_DRAW_FS = `
     precision mediump float;
     uniform sampler2D u_color_ramp;
     varying float v_speed;
+    varying float v_alpha;
     void main() {
       if (v_speed < 1.5) discard;
-      vec2 pc = gl_PointCoord - 0.5;
-      if (dot(pc, pc) > 0.25) discard;
       float t = clamp(v_speed / 40.0, 0.0, 1.0);
       vec4 c = texture2D(u_color_ramp, vec2(t, 0.5));
-      gl_FragColor = vec4(c.rgb, c.a * 0.85);
+      gl_FragColor = vec4(c.rgb, c.a * v_alpha);
     }`;
 
   const W_SCREEN_FS = `
@@ -2219,11 +2225,16 @@
         gl.bindBuffer(gl.ARRAY_BUFFER, qBuf);
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
 
-        const idx = new Float32Array(PARTICLE_COUNT);
-        for (let i = 0; i < PARTICLE_COUNT; i++) idx[i] = i;
+        // Two vertices per particle: (index, endpoint=0) and (index, endpoint=1)
+        // Interleaved: [idx0, 0, idx0, 1, idx1, 0, idx1, 1, ...]
+        const lineData = new Float32Array(PARTICLE_COUNT * 4);
+        for (let i = 0; i < PARTICLE_COUNT; i++) {
+          lineData[i*4]   = i;  lineData[i*4+1] = 0; // prev position
+          lineData[i*4+2] = i;  lineData[i*4+3] = 1; // curr position
+        }
         iBuf = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, iBuf);
-        gl.bufferData(gl.ARRAY_BUFFER, idx, gl.STATIC_DRAW);
+        gl.bufferData(gl.ARRAY_BUFFER, lineData, gl.STATIC_DRAW);
 
         makeRamp(gl); initParticles(gl);
 
@@ -2291,13 +2302,17 @@
         gl.uniform1f(gl.getUniformLocation(scProg, 'u_floor'), 0.0);
         drawQuad(gl, scProg);
 
-        // Pass 3: Draw particles onto faded trail
+        // Pass 3: Draw particles as line segments (prev pos → curr pos)
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
         gl.useProgram(drProg);
-        const updP = pIdx === 0 ? pTex0 : pTex1;
-        glBind(gl, updP, 0);
-        gl.uniform1i(gl.getUniformLocation(drProg, 'u_particles'), 0);
+        // Bind both current and previous particle textures
+        const currP = pIdx === 0 ? pTex0 : pTex1;
+        const prevP = pIdx === 0 ? pTex1 : pTex0;
+        glBind(gl, currP, 0);
+        gl.uniform1i(gl.getUniformLocation(drProg, 'u_particles_curr'), 0);
+        glBind(gl, prevP, 4);
+        gl.uniform1i(gl.getUniformLocation(drProg, 'u_particles_prev'), 4);
         glBind(gl, wuTex, 1);
         gl.uniform1i(gl.getUniformLocation(drProg, 'u_wind_u'), 1);
         glBind(gl, wvTex, 2);
@@ -2309,12 +2324,18 @@
         gl.uniform2f(gl.getUniformLocation(drProg, 'u_wind_max'), WB.x1, WB.y1);
         gl.uniformMatrix4fv(gl.getUniformLocation(drProg, 'u_matrix'), false, new Float32Array(matrix));
 
+        // Interleaved buffer: [index, endpoint, index, endpoint, ...]
+        // stride = 8 bytes (2 floats), a_index at offset 0, a_endpoint at offset 4
         const aIdx = gl.getAttribLocation(drProg, 'a_index');
+        const aEnd = gl.getAttribLocation(drProg, 'a_endpoint');
         gl.bindBuffer(gl.ARRAY_BUFFER, iBuf);
         gl.enableVertexAttribArray(aIdx);
-        gl.vertexAttribPointer(aIdx, 1, gl.FLOAT, false, 0, 0);
-        gl.drawArrays(gl.POINTS, 0, PARTICLE_COUNT);
+        gl.vertexAttribPointer(aIdx, 1, gl.FLOAT, false, 8, 0);
+        gl.enableVertexAttribArray(aEnd);
+        gl.vertexAttribPointer(aEnd, 1, gl.FLOAT, false, 8, 4);
+        gl.drawArrays(gl.LINES, 0, PARTICLE_COUNT * 2);
         gl.disableVertexAttribArray(aIdx);
+        gl.disableVertexAttribArray(aEnd);
 
         // Pass 4: Composite onto MapLibre's framebuffer
         // Fade particles out when zoomed out so radar is visible
