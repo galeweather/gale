@@ -2259,9 +2259,12 @@
         gl.uniform1i(gl.getUniformLocation(upProg, 'u_wind_v'), 2);
         gl.uniform2f(gl.getUniformLocation(upProg, 'u_wind_min'), WB.x0, WB.y0);
         gl.uniform2f(gl.getUniformLocation(upProg, 'u_wind_max'), WB.x1, WB.y1);
-        gl.uniform1f(gl.getUniformLocation(upProg, 'u_speed_factor'), 0.000012);
-        gl.uniform1f(gl.getUniformLocation(upProg, 'u_drop_rate'), 0.01);
-        gl.uniform1f(gl.getUniformLocation(upProg, 'u_drop_rate_bump'), 0.001);
+        // Scale speed + drop rate with zoom: slower movement and longer life when zoomed in
+        const zoom = mapR.getZoom();
+        const zoomScale = Math.pow(2, 4 - zoom); // halves speed per zoom level above 4
+        gl.uniform1f(gl.getUniformLocation(upProg, 'u_speed_factor'), 0.000012 * zoomScale);
+        gl.uniform1f(gl.getUniformLocation(upProg, 'u_drop_rate'), 0.003 + 0.007 * Math.max(0, (8 - zoom) / 8));
+        gl.uniform1f(gl.getUniformLocation(upProg, 'u_drop_rate_bump'), 0.0003);
         gl.uniform1f(gl.getUniformLocation(upProg, 'u_rand_seed'), Math.random());
         const vb = getViewBounds();
         gl.uniform2f(gl.getUniformLocation(upProg, 'u_view_min'), vb.minX, vb.minY);
@@ -2282,7 +2285,9 @@
         gl.viewport(0, 0, cw, ch);
         glBind(gl, curS, 0);
         gl.uniform1i(gl.getUniformLocation(scProg, 'u_screen'), 0);
-        gl.uniform1f(gl.getUniformLocation(scProg, 'u_opacity'), FADE_OPACITY);
+        // Longer trails when zoomed in so you can see flow direction
+        const trailFade = Math.min(0.98, FADE_OPACITY + (zoom - 4) * 0.003);
+        gl.uniform1f(gl.getUniformLocation(scProg, 'u_opacity'), trailFade);
         gl.uniform1f(gl.getUniformLocation(scProg, 'u_floor'), 0.0);
         drawQuad(gl, scProg);
 
@@ -2313,7 +2318,6 @@
 
         // Pass 4: Composite onto MapLibre's framebuffer
         // Fade particles out when zoomed out so radar is visible
-        const zoom = mapR.getZoom();
         const zoomOpacity = Math.min(0.8, Math.max(0.0, (zoom - 2) / 4));
         gl.bindFramebuffer(gl.FRAMEBUFFER, prevFBO);
         gl.viewport(0, 0, cw, ch);
