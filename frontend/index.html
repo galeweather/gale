@@ -1892,6 +1892,7 @@
   const PARTICLE_COUNT = PARTICLE_RES * PARTICLE_RES;
   const FADE_OPACITY = window.innerWidth < 640 ? 0.965 : 0.975;
   let windParticleLayer = null;
+  let windFieldData = null; // Raw U/V ImageData for streamline CPU sampling
 
   function glShader(gl, type, src) {
     const s = gl.createShader(type);
@@ -2144,6 +2145,8 @@
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, canW, canH, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(uD.data.buffer));
         gl.bindTexture(gl.TEXTURE_2D, wvTex);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, canW, canH, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(vD.data.buffer));
+        // Store raw data for streamline CPU sampling
+        windFieldData = { uData: uD.data, vData: vD.data, width: canW, height: canH, wb: {...WB} };
         windLoaded = true;
         windLoadedTime = performance.now();
         clearTrails();
@@ -2274,6 +2277,9 @@
 
       render(gl, matrix) {
         if (!layers.wind || !windLoaded || !upProg) return;
+        // Skip particles at z7+ — streamlines take over
+        const renderZoom = mapR ? mapR.getZoom() : 4;
+        if (renderZoom >= 7) { mapR.triggerRepaint(); return; }
         resizeScreen(gl);
 
         // Save MapLibre GL state
@@ -2393,6 +2399,247 @@
       }
     };
   }
+
+  // ─── Wind Streamline System (Canvas 2D, z7+) ─────────────────
+  function initStreamlines() {
+    const canvas = document.createElement('canvas');
+    canvas.id = 'streamline-canvas';
+    canvas.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:1;';
+    document.getElementById('map').appendChild(canvas);
+    const ctx = canvas.getContext('2d');
+
+    const MAX_STREAKS = 350;
+    const STEPS_PER_STREAK = 40;      // trace steps through wind field
+    const STREAK_SPEED = 1.2;          // pixels per frame the head advances
+    const HEAD_BRIGHTNESS = 0.9;
+    const MIN_WIND_SPEED = 0.5;        // m/s — don't draw streaks in dead calm
+
+    let streaks = [];
+    let gradientMap = null;
+    let lastViewKey = '';
+    let animFrame = null;
+    let active = false;
+
+    // Sample wind at a Mercator [0,1] coordinate → {u, v, speed}
+    function sampleWind(mx, my) {
+      const wf = windFieldData;
+      if (!wf) return { u: 0, v: 0, speed: 0 };
+      const wb = wf.wb;
+      const fx = (mx - wb.x0) / (wb.x1 - wb.x0);
+      const fy = (my - wb.y0) / (wb.y1 - wb.y0);
+      if (fx < 0 || fx > 1 || fy < 0 || fy > 1) return { u: 0, v: 0, speed: 0 };
+      const px = Math.floor(fx * (wf.width - 1));
+      const py = Math.floor(fy * (wf.height - 1));
+      const idx = (py * wf.width + px) * 4;
+      const ua = wf.uData[idx + 3], va = wf.vData[idx + 3];
+      if (ua < 25 || va < 25) return { u: 0, v: 0, speed: 0 }; // nodata
+      const u = wf.uData[idx] / 255 * 80 - 40;
+      const v = wf.vData[idx] / 255 * 80 - 40;
+      return { u, v, speed: Math.sqrt(u * u + v * v) };
+    }
+
+    // Mercator ↔ lat/lng helpers
+    function mercToLng(mx) { return mx * 360 - 180; }
+    function mercToLat(my) {
+      const y = Math.PI * (1 - 2 * my);
+      return Math.atan(Math.sinh(y)) * 180 / Math.PI;
+    }
+    function lngToMerc(lng) { return (lng + 180) / 360; }
+    function latToMerc(lat) {
+      const s = Math.sin(lat * Math.PI / 180);
+      return 0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI);
+    }
+
+    // Compute gradient map: spatial wind variation across viewport
+    function computeGradientMap(bounds) {
+      const GRID = 20;
+      const w = bounds.getWest(), e = bounds.getEast();
+      const n = bounds.getNorth(), s = bounds.getSouth();
+      const cells = [];
+      let maxGrad = 0;
+      for (let gy = 0; gy < GRID; gy++) {
+        for (let gx = 0; gx < GRID; gx++) {
+          const lat = n + (s - n) * (gy + 0.5) / GRID;
+          const lng = w + (e - w) * (gx + 0.5) / GRID;
+          const mx = lngToMerc(lng), my = latToMerc(lat);
+          const here = sampleWind(mx, my);
+          // Sample neighbors for gradient
+          const dlat = (s - n) / GRID * 0.5;
+          const dlng = (e - w) / GRID * 0.5;
+          const right = sampleWind(lngToMerc(lng + dlng), my);
+          const down = sampleWind(mx, latToMerc(lat + dlat));
+          const dudx = right.u - here.u, dvdx = right.v - here.v;
+          const dudy = down.u - here.u, dvdy = down.v - here.v;
+          const grad = Math.sqrt(dudx*dudx + dvdx*dvdx + dudy*dudy + dvdy*dvdy);
+          maxGrad = Math.max(maxGrad, grad);
+          cells.push({ lat, lng, mx, my, wind: here, grad });
+        }
+      }
+      // Normalize gradients and compute spawn weights
+      // Base weight 0.3 (minimum coverage everywhere) + 0.7 * gradient
+      if (maxGrad > 0) {
+        cells.forEach(c => { c.weight = 0.3 + 0.7 * (c.grad / maxGrad); });
+      } else {
+        cells.forEach(c => { c.weight = 1; });
+      }
+      return cells;
+    }
+
+    // Trace a streamline path from a seed point
+    function traceStreamline(mx, my, steps) {
+      const path = [{ mx, my }];
+      let cx = mx, cy = my;
+      const zoom = map.getZoom();
+      // Step size in Mercator space — smaller when zoomed in for smooth curves
+      const stepSize = 0.00008 / Math.pow(2, zoom - 5);
+      for (let i = 0; i < steps; i++) {
+        const w = sampleWind(cx, cy);
+        if (w.speed < MIN_WIND_SPEED) break;
+        const mag = w.speed;
+        cx += (w.u / mag) * stepSize;
+        cy += (-w.v / mag) * stepSize; // v is inverted in Mercator
+        path.push({ mx: cx, my: cy, speed: w.speed });
+      }
+      return path;
+    }
+
+    // Spawn a new streak at a weighted-random position
+    function spawnStreak(cells) {
+      // Weighted random selection
+      const totalWeight = cells.reduce((s, c) => s + c.weight, 0);
+      let r = Math.random() * totalWeight;
+      let cell = cells[0];
+      for (const c of cells) {
+        r -= c.weight;
+        if (r <= 0) { cell = c; break; }
+      }
+      // Jitter within cell
+      const bounds = map.getBounds();
+      const jx = (Math.random() - 0.5) * (bounds.getEast() - bounds.getWest()) / 20;
+      const jy = (Math.random() - 0.5) * (bounds.getSouth() - bounds.getNorth()) / 20;
+      const lng = cell.lng + jx, lat = cell.lat + jy;
+      const mx = lngToMerc(lng), my = latToMerc(lat);
+      const path = traceStreamline(mx, my, STEPS_PER_STREAK);
+      if (path.length < 3) return null; // too short, skip
+      // Convert path to screen coordinates
+      const screenPath = path.map(p => {
+        const pt = map.project([mercToLng(p.mx), mercToLat(p.my)]);
+        return { x: pt.x, y: pt.y, speed: p.speed || 0 };
+      });
+      return {
+        path: screenPath,
+        head: 0,           // current head position (float index into path)
+        age: 0,
+        maxAge: path.length + 15, // travel full path + fade time
+        speed: STREAK_SPEED * (0.7 + Math.random() * 0.6)
+      };
+    }
+
+    function resize() {
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    function update() {
+      if (!active || !windFieldData || !layers.wind) {
+        canvas.style.display = 'none';
+        animFrame = requestAnimationFrame(update);
+        return;
+      }
+      const zoom = map.getZoom();
+      if (zoom < 7) {
+        canvas.style.display = 'none';
+        animFrame = requestAnimationFrame(update);
+        return;
+      }
+      canvas.style.display = 'block';
+      resize();
+
+      // Recompute gradient map if view changed
+      const bounds = map.getBounds();
+      const viewKey = `${zoom.toFixed(1)},${bounds.getWest().toFixed(2)},${bounds.getNorth().toFixed(2)}`;
+      if (viewKey !== lastViewKey) {
+        lastViewKey = viewKey;
+        gradientMap = computeGradientMap(bounds);
+        // Reproject existing streaks (they were in screen coords)
+        streaks = [];
+      }
+
+      // Spawn streaks to fill quota
+      const targetCount = Math.round(MAX_STREAKS * Math.min(1, (zoom - 5) / 4));
+      while (streaks.length < targetCount && gradientMap) {
+        const s = spawnStreak(gradientMap);
+        if (s) streaks.push(s);
+      }
+
+      // Clear and draw
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      for (let i = streaks.length - 1; i >= 0; i--) {
+        const s = streaks[i];
+        s.head += s.speed;
+        s.age++;
+
+        if (s.age > s.maxAge || s.head > s.path.length + 10) {
+          // Replace dead streak
+          if (gradientMap) {
+            const ns = spawnStreak(gradientMap);
+            if (ns) streaks[i] = ns;
+            else streaks.splice(i, 1);
+          }
+          continue;
+        }
+
+        // Draw the streak: from tail to head with fading gradient
+        const headIdx = Math.min(Math.floor(s.head), s.path.length - 1);
+        const tailLen = 20; // how many segments behind head are visible
+        const tailIdx = Math.max(0, headIdx - tailLen);
+
+        if (headIdx <= tailIdx) continue;
+
+        ctx.beginPath();
+        ctx.moveTo(s.path[tailIdx].x, s.path[tailIdx].y);
+        for (let j = tailIdx + 1; j <= headIdx; j++) {
+          ctx.lineTo(s.path[j].x, s.path[j].y);
+        }
+
+        // Gradient from transparent tail to bright head
+        const p0 = s.path[tailIdx], p1 = s.path[headIdx];
+        const dx = p1.x - p0.x, dy = p1.y - p0.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 1) continue;
+
+        let grad;
+        try {
+          grad = ctx.createLinearGradient(p0.x, p0.y, p1.x, p1.y);
+        } catch(e) { continue; }
+        // Fade in at birth, fade out at death
+        const lifeFade = s.age < 10 ? s.age / 10 : (s.age > s.maxAge - 10 ? (s.maxAge - s.age) / 10 : 1);
+        const alpha = HEAD_BRIGHTNESS * Math.max(0, Math.min(1, lifeFade));
+        grad.addColorStop(0, `rgba(255, 255, 255, 0)`);
+        grad.addColorStop(0.7, `rgba(255, 255, 255, ${alpha * 0.5})`);
+        grad.addColorStop(1, `rgba(255, 255, 255, ${alpha})`);
+
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = 1.5;
+        ctx.lineCap = 'round';
+        ctx.stroke();
+      }
+
+      animFrame = requestAnimationFrame(update);
+    }
+
+    return {
+      start() { active = true; if (!animFrame) update(); },
+      stop() { active = false; },
+      destroy() { active = false; if (animFrame) cancelAnimationFrame(animFrame); canvas.remove(); }
+    };
+  }
+
+  let windStreamlines = null;
 
   // ─── Add Map Layers (order matters: bottom → top) ───
   map.on('load', () => {
@@ -2897,6 +3144,10 @@
     // Wind particles (WebGL custom layer — renders below labels)
     windParticleLayer = createWindParticleLayer();
     map.addLayer(windParticleLayer, 'temp-labels-layer');
+
+    // Wind streamlines (Canvas 2D overlay, activates at z7+)
+    windStreamlines = initStreamlines();
+    windStreamlines.start();
 
     // Wind labels — shows wind speed at grid points
     map.addSource('wind-labels', {
