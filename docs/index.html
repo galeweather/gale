@@ -2041,6 +2041,7 @@
         }
       }
       gl_Position = u_matrix * vec4(pos, 0.0, 1.0);
+      gl_PointSize = clamp(1.0 + v_speed * 0.05, 1.0, 2.0);
     }`;
 
   const W_DRAW_FS = `
@@ -2071,7 +2072,7 @@
     let windLoaded = false, cameraMoving = false, windLoadedTime = 0;
     let upProg, drProg, scProg;
     let wuTex, wvTex, crTex, pTex0, pTex1, sTex0, sTex1;
-    let qBuf, iBuf, fbo;
+    let qBuf, iBuf, iPtBuf, fbo;
     let pIdx = 0, sIdx = 0, mapR, glR, cw = 0, ch = 0;
     // Dynamic wind texture bounds — updated when tiles reload
     let WB = { x0: 1/8, y0: 2/8, x1: 3/8, y1: 4/8 };
@@ -2265,12 +2266,18 @@
         gl.bindBuffer(gl.ARRAY_BUFFER, qBuf);
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
 
-        // 2 vertices per particle: index*2 = prev position, index*2+1 = current position
-        const idx = new Float32Array(PARTICLE_COUNT * 2);
-        for (let i = 0; i < PARTICLE_COUNT; i++) { idx[i*2] = i*2; idx[i*2+1] = i*2+1; }
+        // Line buffer: 2 vertices per particle (prev→current)
+        const lineIdx = new Float32Array(PARTICLE_COUNT * 2);
+        for (let i = 0; i < PARTICLE_COUNT; i++) { lineIdx[i*2] = i*2; lineIdx[i*2+1] = i*2+1; }
         iBuf = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, iBuf);
-        gl.bufferData(gl.ARRAY_BUFFER, idx, gl.STATIC_DRAW);
+        gl.bufferData(gl.ARRAY_BUFFER, lineIdx, gl.STATIC_DRAW);
+        // Point buffer: 1 vertex per particle (current position only, endpoint=1)
+        const ptIdx = new Float32Array(PARTICLE_COUNT);
+        for (let i = 0; i < PARTICLE_COUNT; i++) ptIdx[i] = i*2 + 1;
+        iPtBuf = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, iPtBuf);
+        gl.bufferData(gl.ARRAY_BUFFER, ptIdx, gl.STATIC_DRAW);
 
         makeRamp(gl); initParticles(gl);
 
@@ -2367,10 +2374,19 @@
         gl.uniformMatrix4fv(gl.getUniformLocation(drProg, 'u_matrix'), false, new Float32Array(matrix));
 
         const aIdx = gl.getAttribLocation(drProg, 'a_index');
-        gl.bindBuffer(gl.ARRAY_BUFFER, iBuf);
         gl.enableVertexAttribArray(aIdx);
-        gl.vertexAttribPointer(aIdx, 1, gl.FLOAT, false, 0, 0);
-        gl.drawArrays(gl.LINES, 0, PARTICLE_COUNT * 2);
+        if (zoom >= 7) {
+          // Zoomed in: draw connected line segments (limited to 16K particles)
+          gl.bindBuffer(gl.ARRAY_BUFFER, iBuf);
+          gl.vertexAttribPointer(aIdx, 1, gl.FLOAT, false, 0, 0);
+          const lineCount = Math.min(PARTICLE_COUNT, 16384);
+          gl.drawArrays(gl.LINES, 0, lineCount * 2);
+        } else {
+          // Zoomed out: draw points (original look)
+          gl.bindBuffer(gl.ARRAY_BUFFER, iPtBuf);
+          gl.vertexAttribPointer(aIdx, 1, gl.FLOAT, false, 0, 0);
+          gl.drawArrays(gl.POINTS, 0, PARTICLE_COUNT);
+        }
         gl.disableVertexAttribArray(aIdx);
 
         // Pass 4: Composite onto MapLibre's framebuffer
@@ -2397,7 +2413,7 @@
 
       onRemove(map, gl) {
         [wuTex, wvTex, crTex, pTex0, pTex1, sTex0, sTex1].forEach(t => t && gl.deleteTexture(t));
-        [qBuf, iBuf].forEach(b => b && gl.deleteBuffer(b));
+        [qBuf, iBuf, iPtBuf].forEach(b => b && gl.deleteBuffer(b));
         [upProg, drProg, scProg].forEach(p => p && gl.deleteProgram(p));
         if (fbo) gl.deleteFramebuffer(fbo);
       },
