@@ -1980,9 +1980,9 @@
       }
       float spd = length(wind);
       vec2 dir = spd > 0.001 ? wind / spd : vec2(0.0);
-      float scaledSpd = clamp(sqrt(spd), 0.8, 3.5);
+      float scaledSpd = clamp(sqrt(spd), 1.5, 3.5);
       vec2 npos = pos + dir * scaledSpd * u_speed_factor;
-      float drop = spd < 0.5 ? 1.0 : u_drop_rate + spd * u_drop_rate_bump;
+      float drop = spd < 0.1 ? 1.0 : u_drop_rate + spd * u_drop_rate_bump;
       vec2 seed = pos + u_rand_seed;
       vec2 respawn = vec2(
         u_view_min.x + rand(seed + 1.3) * (u_view_max.x - u_view_min.x),
@@ -2029,7 +2029,7 @@
     uniform sampler2D u_color_ramp;
     varying float v_speed;
     void main() {
-      if (v_speed < 1.5) discard;
+      if (v_speed < 0.3) discard;
       float t = clamp(v_speed / 40.0, 0.0, 1.0);
       vec4 c = texture2D(u_color_ramp, vec2(t, 0.5));
       gl_FragColor = vec4(c.rgb, 1.0);
