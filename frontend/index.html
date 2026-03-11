@@ -1830,6 +1830,7 @@
       ATMOS.data = new Int16Array(buf, ATMOS.HEADER_SIZE);
       ATMOS.loaded = true;
       console.log(`Atmosphere profile loaded: ${ATMOS.data.length} values (${(buf.byteLength/1024).toFixed(0)} KB)`);
+      if (layers.jetstream) updateJetStream();
     }).catch(err => {
       console.warn('Atmosphere profile not available:', err.message);
     });
