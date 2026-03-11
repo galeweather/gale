@@ -2088,16 +2088,15 @@
     }
 
     function loadWind(gl, tileZoom) {
-      // Always load full CONUS at z5 — hardcoded coverage so it works
-      // even before map is ready. 28 tiles, 1792x1024 texture.
-      tileZoom = 5;
+      // Always load full CONUS at z6 — max detail, 84 tiles, 3072x1792 texture
+      tileZoom = 6;
       const coverage = {
         tiles: [],
-        x0: 4, y0: 10, x1: 10, y1: 13, gridSize: 32
+        x0: 9, y0: 21, x1: 20, y1: 27, gridSize: 64
       };
-      for (let y = 10; y <= 13; y++)
-        for (let x = 4; x <= 10; x++)
-          coverage.tiles.push({x, y, z: 5});
+      for (let y = 21; y <= 27; y++)
+        for (let x = 9; x <= 20; x++)
+          coverage.tiles.push({x, y, z: 6});
       const { tiles, x0, y0, x1, y1, gridSize } = coverage;
       if (tiles.length === 0) return;
 
@@ -2149,11 +2148,10 @@
       });
     }
 
-    // Always use z5 CONUS tiles — max detail that fits in GPU memory (~7MB per texture)
-    // z6 = 42MB total, crashes phones. z5 = 14MB total, 4x detail of z3.
-    function getWindTileZoom() { return 5; }
+    // Always use z6 CONUS tiles — max available detail, loaded once
+    function getWindTileZoom() { return 6; }
 
-    // No-op: wind tiles are loaded once at z5 and never change
+    // No-op: wind tiles are loaded once at z6 and never change
     function checkWindReload() {}
 
     function makeRamp(gl) {
