@@ -2332,9 +2332,9 @@
         gl.viewport(0, 0, cw, ch);
         glBind(gl, curS, 0);
         gl.uniform1i(gl.getUniformLocation(scProg, 'u_screen'), 0);
-        // Shorter trails zoomed out (less bright), longer zoomed in (visible flow)
-        const fadeLerp = Math.min(1, Math.max(0, (zoom - 3) / 7)); // 0 at z3, 1 at z10
-        const trailFade = 0.95 + fadeLerp * 0.04; // 0.95 at z3, 0.99 at z10
+        // Longer streaks when zoomed in — shows wind flow direction clearly
+        const fadeLerp = Math.min(1, Math.max(0, (zoom - 3) / 5)); // 0 at z3, 1 at z8
+        const trailFade = 0.93 + fadeLerp * 0.065; // 0.93 at z3 (short), 0.995 at z8+ (long streaks)
         gl.uniform1f(gl.getUniformLocation(scProg, 'u_opacity'), trailFade);
         gl.uniform1f(gl.getUniformLocation(scProg, 'u_floor'), 0.0);
         drawQuad(gl, scProg);
