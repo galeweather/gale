@@ -1423,6 +1423,13 @@
     <span>Alerts</span>
   </button>
 
+  <button class="layer-btn" data-layer="jetstream" title="Jet Stream (J) — 250mb winds" aria-label="Toggle jet stream layer" aria-pressed="false">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+      <path d="M2 12c3-4 6-4 10 0s7 4 10 0"/><path d="M2 8c3-4 6-4 10 0s7 4 10 0" opacity="0.4"/>
+    </svg>
+    <span>Jet Stream</span>
+  </button>
+
   <div class="layer-divider"></div>
 
   <div class="view-toggle-group" id="viewToggleGroup">
@@ -1793,7 +1800,8 @@
     wind: true,
     precip: true,
     satellite: false,
-    alerts: false
+    alerts: false,
+    jetstream: false
   };
 
   // ─── Atmospheric Profile Data ──────────────
@@ -2906,10 +2914,10 @@
         'text-field': ['get', 'label'],
         'text-size': 14,
         'text-font': ['Noto Sans Bold'],
-        'text-allow-overlap': true,
-        'text-ignore-placement': true,
+        'text-allow-overlap': false,
+        'text-ignore-placement': false,
         'text-offset': [0, -3.0],
-        'text-padding': 4
+        'text-padding': 12
       },
       paint: {
         'text-color': [
@@ -2926,7 +2934,7 @@
         ],
         'text-halo-color': 'rgba(0, 0, 0, 0.5)',
         'text-halo-width': 2,
-        'text-opacity': 0.6
+        'text-opacity': 0.7
       }
     });
 
@@ -2948,16 +2956,16 @@
         'text-field': ['get', 'label'],
         'text-size': 14,
         'text-font': ['Noto Sans Bold'],
-        'text-allow-overlap': true,
-        'text-ignore-placement': true,
+        'text-allow-overlap': false,
+        'text-ignore-placement': false,
         'text-offset': [0, 1.2],
-        'text-padding': 4
+        'text-padding': 12
       },
       paint: {
         'text-color': '#38bdf8',
         'text-halo-color': 'rgba(0, 0, 0, 0.5)',
         'text-halo-width': 1.5,
-        'text-opacity': 0.6
+        'text-opacity': 0.7
       }
     });
 
@@ -2972,16 +2980,16 @@
         'text-font': ['Noto Sans Bold'],
         'text-rotation-alignment': 'viewport',
         'text-rotate': ['get', 'direction'],
-        'text-allow-overlap': true,
-        'text-ignore-placement': true,
+        'text-allow-overlap': false,
+        'text-ignore-placement': false,
         'text-offset': [0, -0.4],
-        'text-padding': 4
+        'text-padding': 8
       },
       paint: {
         'text-color': '#38bdf8',
         'text-halo-color': 'rgba(0, 0, 0, 0.5)',
         'text-halo-width': 1.5,
-        'text-opacity': 0.6
+        'text-opacity': 0.7
       }
     });
 
@@ -3082,11 +3090,11 @@
         'text-font': ['Noto Sans Bold'],
         'text-offset': [0, 1.2],
         'text-anchor': 'top',
-        'icon-allow-overlap': true,
-        'text-allow-overlap': true,
-        'icon-ignore-placement': true,
-        'text-ignore-placement': true,
-        'text-padding': 8
+        'icon-allow-overlap': false,
+        'text-allow-overlap': false,
+        'icon-ignore-placement': false,
+        'text-ignore-placement': false,
+        'text-padding': 12
       },
       paint: {
         'text-color': ['match', ['get', 'type'], 'snow', '#ffffff', '#60a5fa'],
@@ -3282,6 +3290,102 @@
           'interpolate', ['linear'], ['zoom'],
           8, 0, 9, 0.8
         ]
+      }
+    });
+
+    // ── Jet Stream Layer (250mb wind from atmosphere profile) ──
+    map.addSource('jetstream-lines', {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: [] }
+    });
+    map.addSource('jetstream-arrows', {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: [] }
+    });
+
+    // Jet stream ribbon — colored by speed, wide dashed line
+    map.addLayer({
+      id: 'jetstream-line-layer',
+      type: 'line',
+      source: 'jetstream-lines',
+      layout: {
+        visibility: 'none',
+        'line-join': 'round',
+        'line-cap': 'round'
+      },
+      paint: {
+        'line-color': [
+          'interpolate', ['linear'], ['get', 'speed'],
+          60,  'rgba(147, 130, 255, 0.3)',    // light purple — threshold
+          80,  'rgba(167, 139, 250, 0.5)',    // violet
+          100, 'rgba(236, 72, 153, 0.6)',     // pink
+          120, 'rgba(251, 146, 60, 0.7)',     // orange
+          150, 'rgba(250, 204, 21, 0.8)'      // gold — extreme
+        ],
+        'line-width': [
+          'interpolate', ['linear'], ['get', 'speed'],
+          60, 3,
+          100, 6,
+          150, 10
+        ],
+        'line-dasharray': [2, 1],
+        'line-blur': 2
+      }
+    });
+
+    // Glow layer underneath for depth
+    map.addLayer({
+      id: 'jetstream-glow-layer',
+      type: 'line',
+      source: 'jetstream-lines',
+      layout: {
+        visibility: 'none',
+        'line-join': 'round',
+        'line-cap': 'round'
+      },
+      paint: {
+        'line-color': [
+          'interpolate', ['linear'], ['get', 'speed'],
+          60,  'rgba(147, 130, 255, 0.08)',
+          100, 'rgba(236, 72, 153, 0.15)',
+          150, 'rgba(250, 204, 21, 0.2)'
+        ],
+        'line-width': [
+          'interpolate', ['linear'], ['get', 'speed'],
+          60, 12,
+          100, 20,
+          150, 30
+        ],
+        'line-blur': 8
+      }
+    }, 'jetstream-line-layer'); // render glow BELOW the line
+
+    // Jet stream speed labels
+    map.addLayer({
+      id: 'jetstream-arrows-layer',
+      type: 'symbol',
+      source: 'jetstream-arrows',
+      layout: {
+        visibility: 'none',
+        'text-field': ['concat', ['get', 'label'], ' kt'],
+        'text-font': ['Noto Sans Bold'],
+        'text-size': 11,
+        'text-allow-overlap': false,
+        'text-padding': 20,
+        'text-rotation-alignment': 'viewport',
+        'text-pitch-alignment': 'viewport',
+        'icon-image': '',
+        'symbol-placement': 'point'
+      },
+      paint: {
+        'text-color': [
+          'interpolate', ['linear'], ['get', 'speed'],
+          60,  '#a78bfa',
+          100, '#ec4899',
+          150, '#facc15'
+        ],
+        'text-halo-color': 'rgba(5, 8, 15, 0.9)',
+        'text-halo-width': 2.5
       }
     });
 
@@ -3717,6 +3821,113 @@
     }
   }
 
+  // ─── Jet Stream (250mb wind from atmosphere profile) ───
+  let jetStreamGen = 0;
+  function updateJetStream() {
+    if (!layers.jetstream || !ATMOS.loaded) return;
+    const gen = ++jetStreamGen;
+
+    // Sample 250mb wind across CONUS on a coarse grid
+    const JET_COLS = 28, JET_ROWS = 14;
+    const lonMin = ATMOS.LON_MIN, lonMax = ATMOS.LON_MAX;
+    const latMin = ATMOS.LAT_MIN, latMax = ATMOS.LAT_MAX;
+    const lonStep = (lonMax - lonMin) / JET_COLS;
+    const latStep = (latMax - latMin) / JET_ROWS;
+    const JET_THRESHOLD_KT = 60; // knots — standard jet stream threshold
+
+    // Build a grid of 250mb wind data
+    const grid = [];
+    for (let r = 0; r < JET_ROWS; r++) {
+      for (let c = 0; c < JET_COLS; c++) {
+        const lng = lonMin + (c + 0.5) * lonStep;
+        const lat = latMin + (r + 0.5) * latStep;
+        const profile = sampleAtmosphere(lng, lat);
+        if (!profile) { grid.push(null); continue; }
+        // 250mb is index 5 (last level)
+        const lev = profile[5];
+        const speedMs = Math.sqrt(lev.uWind * lev.uWind + lev.vWind * lev.vWind);
+        const speedKt = speedMs * 1.944; // m/s → knots
+        const dir = (Math.atan2(-lev.uWind, -lev.vWind) * 180 / Math.PI + 360) % 360;
+        grid.push({ lng, lat, speedKt, dir, u: lev.uWind, v: lev.vWind });
+      }
+    }
+
+    if (gen !== jetStreamGen) return;
+
+    // Build streamline segments through the jet core
+    // For each point above threshold, trace a short streamline (5 steps)
+    const lineFeatures = [];
+    const arrowFeatures = [];
+    const visited = new Set();
+
+    // Find jet core points and trace streamlines
+    const jetPoints = grid
+      .map((g, i) => g && g.speedKt >= JET_THRESHOLD_KT ? { ...g, idx: i } : null)
+      .filter(Boolean)
+      .sort((a, b) => b.speedKt - a.speedKt); // strongest first
+
+    for (const pt of jetPoints) {
+      const col = pt.idx % JET_COLS;
+      const row = Math.floor(pt.idx / JET_COLS);
+      // Skip if near an already-traced streamline
+      const gridKey = `${Math.floor(col / 2)},${Math.floor(row / 2)}`;
+      if (visited.has(gridKey)) continue;
+      visited.add(gridKey);
+
+      // Trace streamline forward and backward from this point
+      const coords = [];
+      const traceDir = (startLng, startLat, forward) => {
+        let lng = startLng, lat = startLat;
+        const pts = [{ lng, lat }];
+        for (let step = 0; step < 8; step++) {
+          const profile = sampleAtmosphere(lng, lat);
+          if (!profile) break;
+          const lev = profile[5];
+          const spd = Math.sqrt(lev.uWind * lev.uWind + lev.vWind * lev.vWind);
+          if (spd * 1.944 < JET_THRESHOLD_KT * 0.5) break; // stop if wind drops
+          const scale = forward ? 1 : -1;
+          // Step size ~0.8° per step (proportional to grid spacing)
+          lng += scale * lev.uWind / spd * lonStep * 0.8;
+          lat += scale * lev.vWind / spd * latStep * 0.8;
+          // Bounds check
+          if (lng < lonMin || lng > lonMax || lat < latMin || lat > latMax) break;
+          pts.push({ lng, lat });
+        }
+        return pts;
+      };
+
+      const backward = traceDir(pt.lng, pt.lat, false).reverse();
+      const forward = traceDir(pt.lng, pt.lat, true);
+      // Combine: backward (reversed) + forward (skip first to avoid duplicate)
+      const fullTrace = [...backward, ...forward.slice(1)];
+
+      if (fullTrace.length >= 3) {
+        lineFeatures.push({
+          type: 'Feature',
+          geometry: {
+            type: 'LineString',
+            coordinates: fullTrace.map(p => [p.lng, p.lat])
+          },
+          properties: { speed: Math.round(pt.speedKt) }
+        });
+
+        // Speed label at the peak point
+        arrowFeatures.push({
+          type: 'Feature',
+          geometry: { type: 'Point', coordinates: [pt.lng, pt.lat] },
+          properties: { label: Math.round(pt.speedKt), speed: Math.round(pt.speedKt) }
+        });
+      }
+    }
+
+    if (map.getSource('jetstream-lines')) {
+      map.getSource('jetstream-lines').setData({ type: 'FeatureCollection', features: lineFeatures });
+    }
+    if (map.getSource('jetstream-arrows')) {
+      map.getSource('jetstream-arrows').setData({ type: 'FeatureCollection', features: arrowFeatures });
+    }
+  }
+
   function updateAllLabels() {
     updateTempLabels();
     updateWindLabels();
@@ -3957,10 +4168,22 @@
       map.setLayoutProperty('precip-labels-layer', 'visibility', layers.precip ? 'visible' : 'none');
     }
 
+    // Jet stream
+    if (map.getLayer('jetstream-line-layer')) {
+      map.setLayoutProperty('jetstream-line-layer', 'visibility', layers.jetstream ? 'visible' : 'none');
+    }
+    if (map.getLayer('jetstream-glow-layer')) {
+      map.setLayoutProperty('jetstream-glow-layer', 'visibility', layers.jetstream ? 'visible' : 'none');
+    }
+    if (map.getLayer('jetstream-arrows-layer')) {
+      map.setLayoutProperty('jetstream-arrows-layer', 'visibility', layers.jetstream ? 'visible' : 'none');
+    }
+
     // Refresh labels when toggled on
     if (layers.temp) updateTempLabels();
     if (layers.wind) { updateWindLabels(); map.triggerRepaint(); }
     if (layers.precip) updatePrecipLabels();
+    if (layers.jetstream) updateJetStream();
 
     // Legend: radar takes priority, then precip, then wind, then temp
     const legend = document.getElementById('legend');
@@ -5425,6 +5648,7 @@
       case 'w': document.querySelector('[data-layer="wind"]').click(); break;
       case 'p': document.querySelector('[data-layer="precip"]').click(); break;
       case 's': document.querySelector('[data-layer="satellite"]').click(); break;
+      case 'j': document.querySelector('[data-layer="jetstream"]').click(); break;
       case 'v': cycleView(); break;
       case 'x': toggleXsectionMode(); break;
       case 'a': toggleAtmosColumns(); atmosToggle.classList.toggle('active', atmosColumnsVisible); atmosToggle.setAttribute('aria-pressed', String(atmosColumnsVisible)); break;
