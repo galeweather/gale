@@ -4711,19 +4711,21 @@
         if (dbz < 12 && rnd1 < 0.15) continue;
 
         // ── Cloud deck altitude ──
+        // Exaggerated to ~20km so clouds are clearly visible above terrain when tilted.
+        // Light returns higher (cirrus-like), heavy returns lower (cumulonimbus-like).
         let deckBase, deckThick;
         if (dbz < 20) {
-          deckBase = 4500 + rnd4 * 1500;
-          deckThick = 400 + rnd1 * 300;
+          deckBase = 22000 + rnd4 * 4000;
+          deckThick = 1500 + rnd1 * 1000;
         } else if (dbz < 35) {
-          deckBase = 3500 + rnd4 * 1200;
-          deckThick = 500 + rnd1 * 400;
+          deckBase = 18000 + rnd4 * 3000;
+          deckThick = 2000 + rnd1 * 1500;
         } else if (dbz < 50) {
-          deckBase = 2500 + rnd4 * 800;
-          deckThick = 600 + rnd1 * 500;
+          deckBase = 15000 + rnd4 * 2000;
+          deckThick = 2500 + rnd1 * 1500;
         } else {
-          deckBase = 2000 + rnd4 * 500;
-          deckThick = 800 + rnd1 * 600;
+          deckBase = 12000 + rnd4 * 2000;
+          deckThick = 3000 + rnd1 * 2000;
         }
         deckBase = Math.round(deckBase);
         const deckTop = Math.round(deckBase + deckThick);
