@@ -3098,11 +3098,11 @@
     // ── Vector Place Labels (OpenFreeMap, renders above all weather) ──
     // (source added earlier, before water/roads/boundaries that use it)
 
-    // Shared paint for frosted dark halo
+    // Shared paint for frosted dark halo — strong contrast against weather overlays
     const labelHalo = {
-      'text-halo-color': 'rgba(10, 14, 23, 0.92)',
-      'text-halo-width': 2.5,
-      'text-halo-blur': 1
+      'text-halo-color': 'rgba(5, 8, 15, 0.95)',
+      'text-halo-width': 3,
+      'text-halo-blur': 0.5
     };
 
     // Tier 1: State names (zoom 3–7, uppercase, muted)
@@ -3148,7 +3148,7 @@
         'text-font': ['Noto Sans Bold'],
         'text-size': [
           'interpolate', ['linear'], ['zoom'],
-          3, 13, 8, 18, 12, 22
+          3, 14, 8, 20, 12, 24
         ],
         'text-allow-overlap': false,
         'text-padding': 4,
@@ -3162,7 +3162,7 @@
         'text-offset': [0, -2.5]
       },
       paint: {
-        'text-color': '#e2e8f0',
+        'text-color': '#f1f5f9',
         ...labelHalo,
         'text-opacity': [
           'interpolate', ['linear'], ['zoom'],
@@ -3188,7 +3188,7 @@
         'text-font': ['Noto Sans Bold'],
         'text-size': [
           'interpolate', ['linear'], ['zoom'],
-          4, 12, 8, 15, 12, 18
+          4, 13, 8, 17, 12, 20
         ],
         'text-allow-overlap': false,
         'text-padding': 4,
@@ -3202,7 +3202,7 @@
         'text-offset': [0, -2.2]
       },
       paint: {
-        'text-color': '#e2e8f0',
+        'text-color': '#f1f5f9',
         ...labelHalo,
         'text-opacity': [
           'interpolate', ['linear'], ['zoom'],
@@ -3215,20 +3215,20 @@
       }
     });
 
-    // Tier 4: Towns (zoom 7+)
+    // Tier 4: Towns (zoom 6+, earlier than before)
     map.addLayer({
       id: 'place-town',
       type: 'symbol',
       source: 'labels',
       'source-layer': 'place',
       filter: ['==', 'class', 'town'],
-      minzoom: 7,
+      minzoom: 6,
       layout: {
         'text-field': ['get', 'name'],
         'text-font': ['Noto Sans Regular'],
         'text-size': [
           'interpolate', ['linear'], ['zoom'],
-          7, 11, 10, 14
+          6, 11, 8, 13, 10, 15
         ],
         'text-allow-overlap': false,
         'text-padding': 4,
@@ -3242,15 +3242,45 @@
         'text-offset': [0, -2.0]
       },
       paint: {
+        'text-color': '#e2e8f0',
+        ...labelHalo,
+        'text-opacity': [
+          'interpolate', ['linear'], ['zoom'],
+          6, 0, 7, 1
+        ],
+        'icon-opacity': [
+          'interpolate', ['linear'], ['zoom'],
+          6, 0, 7, 0.4
+        ]
+      }
+    });
+
+    // Tier 5: Villages (zoom 8+)
+    map.addLayer({
+      id: 'place-village',
+      type: 'symbol',
+      source: 'labels',
+      'source-layer': 'place',
+      filter: ['==', 'class', 'village'],
+      minzoom: 8,
+      layout: {
+        'text-field': ['get', 'name'],
+        'text-font': ['Noto Sans Regular'],
+        'text-size': [
+          'interpolate', ['linear'], ['zoom'],
+          8, 10, 12, 13
+        ],
+        'text-allow-overlap': false,
+        'text-padding': 4,
+        'text-pitch-alignment': 'viewport',
+        'text-rotation-alignment': 'viewport'
+      },
+      paint: {
         'text-color': '#cbd5e1',
         ...labelHalo,
         'text-opacity': [
           'interpolate', ['linear'], ['zoom'],
-          7, 0, 8, 1
-        ],
-        'icon-opacity': [
-          'interpolate', ['linear'], ['zoom'],
-          7, 0, 8, 0.4
+          8, 0, 9, 0.8
         ]
       }
     });
@@ -3642,36 +3672,46 @@
     const bounds = map.getBounds();
     const west = bounds.getWest(), east = bounds.getEast();
     const north = bounds.getNorth(), south = bounds.getSouth();
-    const cols = 8, rows = 6;
-    const lngStep = (east - west) / cols;
-    const latStep = (north - south) / rows;
+    const lngStep = (east - west) / DENSE_COLS;
+    const latStep = (north - south) / DENSE_ROWS;
 
-    const features = [];
+    // Sample dense grid for precip
+    const samples = new Array(DENSE_COLS * DENSE_ROWS).fill(null);
     const promises = [];
-    for (let row = 0.5; row < rows; row++) {
-      for (let col = 0.5; col < cols; col++) {
-        const lng = west + col * lngStep;
-        const lat = south + row * latStep;
+    for (let r = 0; r < DENSE_ROWS; r++) {
+      for (let c = 0; c < DENSE_COLS; c++) {
+        const lng = west + (c + 0.5) * lngStep;
+        const lat = south + (r + 0.5) * latStep;
+        const i = r * DENSE_COLS + c;
         promises.push(
           Promise.all([
             sampleTileAt(lng, lat, precipTilePath(Math.max(1, Math.round(forecastHourFrac) || 1))),
             sampleTileAt(lng, lat, tempTilePath(fcLowerHour))
           ]).then(([inches, tempF]) => {
-            if (inches !== null && inches > 0) {
-              const type = (tempF !== null && tempF <= 32) ? 'snow' : 'rain';
-              const label = inches < 0.01 ? 'Trace' : `${inches}"`;
-              features.push({
-                type: 'Feature',
-                geometry: { type: 'Point', coordinates: [lng, lat] },
-                properties: { label, type }
-              });
-            }
+            const val = (inches !== null && inches > 0) ? inches : null;
+            const type = (tempF !== null && tempF <= 32) ? 'snow' : 'rain';
+            samples[i] = { lng, lat, val, type };
           })
         );
       }
     }
     await Promise.all(promises);
     if (gen !== precipLabelGen) return;
+
+    // Gradient-based selection for precip
+    const chosen = gradientSelect(samples, DENSE_COLS, DENSE_ROWS);
+    const features = chosen
+      .map(i => samples[i])
+      .filter(s => s && s.val !== null)
+      .map(s => ({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [s.lng, s.lat] },
+        properties: {
+          label: s.val < 0.01 ? 'Trace' : `${s.val}"`,
+          type: s.type
+        }
+      }));
+
     if (map.getSource('precip-labels')) {
       map.getSource('precip-labels').setData({ type: 'FeatureCollection', features });
     }
@@ -3734,10 +3774,10 @@
   }
 
   function applyForecastInterpolation() {
-    // In forecast mode, boost temp visibility so forecast changes are visible
-    // (radar dimmed = less competition, so temp can be stronger)
+    // Temp overlay opacity — keep it subtle so it doesn't overwhelm other layers.
+    // In forecast mode, precip overlay is also visible, so temp must stay low.
     const inForecast = forecastHourFrac > 0;
-    const baseOpacity = inForecast ? 0.6 : (layers.radar ? 0.25 : 0.7);
+    const baseOpacity = inForecast ? 0.25 : (layers.radar ? 0.25 : 0.7);
     const lowerOpacity = baseOpacity * (1 - fcBlend);
     const upperOpacity = baseOpacity * fcBlend;
     if (map.getLayer(currentTempLayerId)) {
