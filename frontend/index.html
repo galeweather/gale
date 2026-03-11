@@ -2155,24 +2155,11 @@
       });
     }
 
-    // Choose wind tile zoom based on map zoom
-    function getWindTileZoom() {
-      if (!mapR) return 3;
-      const z = mapR.getZoom();
-      return Math.min(6, Math.max(3, Math.floor(z)));
-    }
+    // Always use z3 CONUS tiles — consistent wind at every zoom level
+    function getWindTileZoom() { return 3; }
 
-    // Reload wind tiles if viewport coverage changed
-    function checkWindReload() {
-      if (!glR || !mapR) return;
-      const tileZoom = getWindTileZoom();
-      const bounds = mapR.getBounds();
-      const coverage = getTileCoverage(bounds, tileZoom);
-      const key = `${tileZoom}:${coverage.x0},${coverage.y0}-${coverage.x1},${coverage.y1}`;
-      if (key !== currentWindTileKey) {
-        loadWind(glR, tileZoom);
-      }
-    }
+    // No-op: wind tiles are loaded once at z3 and never change
+    function checkWindReload() {}
 
     function makeRamp(gl) {
       const px = new Uint8Array(256 * 4);
