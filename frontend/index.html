@@ -3500,74 +3500,13 @@
       }
     });
 
-    // ── Jet Stream Layer (250mb wind from atmosphere profile) ──
-    map.addSource('jetstream-lines', {
-      type: 'geojson',
-      data: { type: 'FeatureCollection', features: [] }
-    });
+    // ── Jet Stream 3D Layer (custom WebGL, renders at ~10km altitude) ──
     map.addSource('jetstream-arrows', {
       type: 'geojson',
       data: { type: 'FeatureCollection', features: [] }
     });
 
-    // Jet stream ribbon — colored by speed, wide dashed line
-    map.addLayer({
-      id: 'jetstream-line-layer',
-      type: 'line',
-      source: 'jetstream-lines',
-      layout: {
-        visibility: 'none',
-        'line-join': 'round',
-        'line-cap': 'round'
-      },
-      paint: {
-        'line-color': [
-          'interpolate', ['linear'], ['get', 'speed'],
-          60,  'rgba(147, 130, 255, 0.3)',    // light purple — threshold
-          80,  'rgba(167, 139, 250, 0.5)',    // violet
-          100, 'rgba(236, 72, 153, 0.6)',     // pink
-          120, 'rgba(251, 146, 60, 0.7)',     // orange
-          150, 'rgba(250, 204, 21, 0.8)'      // gold — extreme
-        ],
-        'line-width': [
-          'interpolate', ['linear'], ['get', 'speed'],
-          60, 3,
-          100, 6,
-          150, 10
-        ],
-        'line-dasharray': [2, 1],
-        'line-blur': 2
-      }
-    });
-
-    // Glow layer underneath for depth
-    map.addLayer({
-      id: 'jetstream-glow-layer',
-      type: 'line',
-      source: 'jetstream-lines',
-      layout: {
-        visibility: 'none',
-        'line-join': 'round',
-        'line-cap': 'round'
-      },
-      paint: {
-        'line-color': [
-          'interpolate', ['linear'], ['get', 'speed'],
-          60,  'rgba(147, 130, 255, 0.08)',
-          100, 'rgba(236, 72, 153, 0.15)',
-          150, 'rgba(250, 204, 21, 0.2)'
-        ],
-        'line-width': [
-          'interpolate', ['linear'], ['get', 'speed'],
-          60, 12,
-          100, 20,
-          150, 30
-        ],
-        'line-blur': 8
-      }
-    }, 'jetstream-line-layer'); // render glow BELOW the line
-
-    // Jet stream speed labels
+    // Speed labels at altitude (symbol layer with z-offset)
     map.addLayer({
       id: 'jetstream-arrows-layer',
       type: 'symbol',
@@ -3581,7 +3520,6 @@
         'text-padding': 20,
         'text-rotation-alignment': 'viewport',
         'text-pitch-alignment': 'viewport',
-        'icon-image': '',
         'symbol-placement': 'point'
       },
       paint: {
@@ -3595,6 +3533,162 @@
         'text-halo-width': 2.5
       }
     });
+
+    // Custom WebGL jet stream layer — renders 3D ribbons at 10km altitude
+    const jetStream3D = {
+      id: 'jetstream-3d',
+      type: 'custom',
+      renderingMode: '3d',
+      jetData: null, // Array of streamline paths with 3D Mercator coords
+
+      onAdd(map, gl) {
+        // Vertex shader: position + color per vertex
+        const vs = `
+          attribute vec3 a_pos;
+          attribute vec4 a_color;
+          uniform mat4 u_matrix;
+          varying vec4 v_color;
+          void main() {
+            v_color = a_color;
+            gl_Position = u_matrix * vec4(a_pos, 1.0);
+          }`;
+        const fs = `
+          precision mediump float;
+          varying vec4 v_color;
+          void main() {
+            gl_FragColor = v_color;
+          }`;
+
+        function compile(gl, type, src) {
+          const s = gl.createShader(type);
+          gl.shaderSource(s, src);
+          gl.compileShader(s);
+          return s;
+        }
+        const prog = gl.createProgram();
+        gl.attachShader(prog, compile(gl, gl.VERTEX_SHADER, vs));
+        gl.attachShader(prog, compile(gl, gl.FRAGMENT_SHADER, fs));
+        gl.linkProgram(prog);
+        this.program = prog;
+        this.vBuf = gl.createBuffer();
+        this.vertCount = 0;
+      },
+
+      updateGeometry(gl, streamlines) {
+        // Build triangle strip ribbons for each streamline at altitude
+        // 250mb ≈ 10,000m altitude (standard atmosphere)
+        // Source: ICAO Standard Atmosphere, 250 hPa ≈ 10,363m
+        const ALTITUDE = 10000;
+        const verts = [];
+
+        for (const line of streamlines) {
+          if (line.coords.length < 2) continue;
+
+          // Convert to 3D Mercator coordinates
+          const pts = line.coords.map(c => {
+            const mc = maplibregl.MercatorCoordinate.fromLngLat([c.lng, c.lat], ALTITUDE);
+            return { x: mc.x, y: mc.y, z: mc.z, speed: c.speedKt };
+          });
+
+          // Compute ribbon width in Mercator space (~3km ribbon width)
+          // Source: jet stream core width typically 100-400km (AMS Glossary),
+          // 3km visual width for rendering clarity at map scale
+          const ribbonW = maplibregl.MercatorCoordinate.fromLngLat([0, 45], 0).meterInMercatorCoordinateUnits() * 3000;
+
+          // Build triangle strip — two vertices per point (left/right of centerline)
+          for (let i = 0; i < pts.length; i++) {
+            const p = pts[i];
+            // Direction vector for ribbon orientation
+            let dx = 0, dy = 0;
+            if (i < pts.length - 1) {
+              dx = pts[i + 1].x - p.x;
+              dy = pts[i + 1].y - p.y;
+            } else if (i > 0) {
+              dx = p.x - pts[i - 1].x;
+              dy = p.y - pts[i - 1].y;
+            }
+            const len = Math.sqrt(dx * dx + dy * dy) || 1;
+            // Perpendicular (normal to direction)
+            const nx = -dy / len * ribbonW;
+            const ny = dx / len * ribbonW;
+
+            // Speed-based width: wider for faster jet
+            const speedFactor = Math.min(2.5, Math.max(0.5, p.speed / 80));
+
+            // Color: purple → pink → orange → gold based on speed
+            // Same ramp as the old flat layer
+            let r, g, b, a;
+            const spd = p.speed;
+            if (spd < 80) {
+              const t = (spd - 60) / 20;
+              r = 0.58 + t * 0.07; g = 0.51 + t * 0.03; b = 1.0 - t * 0.02; a = 0.3 + t * 0.2;
+            } else if (spd < 100) {
+              const t = (spd - 80) / 20;
+              r = 0.65 + t * 0.28; g = 0.55 - t * 0.27; b = 0.98 - t * 0.38; a = 0.5 + t * 0.1;
+            } else if (spd < 120) {
+              const t = (spd - 100) / 20;
+              r = 0.93 + t * 0.05; g = 0.28 + t * 0.29; b = 0.60 - t * 0.37; a = 0.6 + t * 0.1;
+            } else {
+              const t = Math.min(1, (spd - 120) / 30);
+              r = 0.98; g = 0.57 + t * 0.23; b = 0.23 - t * 0.15; a = 0.7 + t * 0.1;
+            }
+
+            // Left vertex
+            verts.push(p.x + nx * speedFactor, p.y + ny * speedFactor, p.z, r, g, b, a * 0.6);
+            // Right vertex
+            verts.push(p.x - nx * speedFactor, p.y - ny * speedFactor, p.z, r, g, b, a * 0.6);
+          }
+
+          // Degenerate triangle to separate strips
+          if (verts.length > 0) {
+            const last = verts.length - 7;
+            verts.push(verts[last], verts[last+1], verts[last+2], 0, 0, 0, 0);
+            verts.push(verts[last], verts[last+1], verts[last+2], 0, 0, 0, 0);
+          }
+        }
+
+        this.vertCount = verts.length / 7;
+        if (this.vertCount === 0) return;
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.vBuf);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(verts), gl.DYNAMIC_DRAW);
+      },
+
+      render(gl, matrix) {
+        if (!layers.jetstream || this.vertCount === 0) return;
+
+        const prevDepth = gl.isEnabled(gl.DEPTH_TEST);
+        const prevBlend = gl.isEnabled(gl.BLEND);
+
+        gl.enable(gl.DEPTH_TEST);
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+        gl.useProgram(this.program);
+        gl.uniformMatrix4fv(gl.getUniformLocation(this.program, 'u_matrix'), false, matrix);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.vBuf);
+        const stride = 7 * 4; // 3 pos + 4 color floats
+
+        const aPos = gl.getAttribLocation(this.program, 'a_pos');
+        gl.enableVertexAttribArray(aPos);
+        gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, stride, 0);
+
+        const aCol = gl.getAttribLocation(this.program, 'a_color');
+        gl.enableVertexAttribArray(aCol);
+        gl.vertexAttribPointer(aCol, 4, gl.FLOAT, false, stride, 12);
+
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, this.vertCount);
+
+        gl.disableVertexAttribArray(aPos);
+        gl.disableVertexAttribArray(aCol);
+
+        if (!prevDepth) gl.disable(gl.DEPTH_TEST);
+        if (!prevBlend) gl.disable(gl.BLEND);
+      }
+    };
+
+    map.addLayer(jetStream3D);
 
     // Fetch alerts
     fetchAlerts();
@@ -4127,8 +4221,23 @@
       }
     }
 
-    if (map.getSource('jetstream-lines')) {
-      map.getSource('jetstream-lines').setData({ type: 'FeatureCollection', features: lineFeatures });
+    // Feed 3D geometry to custom WebGL layer
+    const jet3dLayer = map.getLayer('jetstream-3d');
+    if (jet3dLayer && jet3dLayer.implementation) {
+      const streamlines = lineFeatures.map(f => ({
+        coords: f.geometry.coordinates.map((c, i) => {
+          // Sample speed at each point for coloring
+          const profile = sampleAtmosphere(c[0], c[1]);
+          let speedKt = f.properties.speed; // fallback to peak speed
+          if (profile && profile[5]) {
+            const lev = profile[5];
+            speedKt = Math.sqrt(lev.uWind * lev.uWind + lev.vWind * lev.vWind) * 1.944;
+          }
+          return { lng: c[0], lat: c[1], speedKt };
+        })
+      }));
+      const gl = map.painter.context.gl;
+      jet3dLayer.implementation.updateGeometry(gl, streamlines);
     }
     if (map.getSource('jetstream-arrows')) {
       map.getSource('jetstream-arrows').setData({ type: 'FeatureCollection', features: arrowFeatures });
@@ -4375,16 +4484,12 @@
       map.setLayoutProperty('precip-labels-layer', 'visibility', layers.precip ? 'visible' : 'none');
     }
 
-    // Jet stream
-    if (map.getLayer('jetstream-line-layer')) {
-      map.setLayoutProperty('jetstream-line-layer', 'visibility', layers.jetstream ? 'visible' : 'none');
-    }
-    if (map.getLayer('jetstream-glow-layer')) {
-      map.setLayoutProperty('jetstream-glow-layer', 'visibility', layers.jetstream ? 'visible' : 'none');
-    }
+    // Jet stream (3D custom layer + speed labels)
+    // Custom WebGL layer visibility is handled in its render() via layers.jetstream check
     if (map.getLayer('jetstream-arrows-layer')) {
       map.setLayoutProperty('jetstream-arrows-layer', 'visibility', layers.jetstream ? 'visible' : 'none');
     }
+    if (layers.jetstream) map.triggerRepaint();
 
     // Refresh labels when toggled on
     if (layers.temp) updateTempLabels();
