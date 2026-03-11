@@ -1982,11 +1982,15 @@
       vec2 dir = spd > 0.001 ? wind / spd : vec2(0.0);
       float scaledSpd = clamp(sqrt(spd), 1.5, 3.5);
       vec2 npos = pos + dir * scaledSpd * u_speed_factor;
-      float drop = spd < 0.1 ? 1.0 : u_drop_rate + spd * u_drop_rate_bump;
+      // Nodata / very low wind → always respawn (kills twinkling)
+      float drop = spd < 1.5 ? 1.0 : u_drop_rate + spd * u_drop_rate_bump;
       vec2 seed = pos + u_rand_seed;
+      // Respawn within viewport (clamped to wind data bounds)
+      vec2 rMin = max(u_view_min, u_wind_min);
+      vec2 rMax = min(u_view_max, u_wind_max);
       vec2 respawn = vec2(
-        u_view_min.x + rand(seed + 1.3) * (u_view_max.x - u_view_min.x),
-        u_view_min.y + rand(seed + 2.1) * (u_view_max.y - u_view_min.y));
+        rMin.x + rand(seed + 1.3) * (rMax.x - rMin.x),
+        rMin.y + rand(seed + 2.1) * (rMax.y - rMin.y));
       bool oob = npos.x < u_wind_min.x || npos.x > u_wind_max.x ||
                  npos.y < u_wind_min.y || npos.y > u_wind_max.y;
       gl_FragColor = encode((rand(seed) < drop || oob) ? respawn : npos);
@@ -2029,7 +2033,7 @@
     uniform sampler2D u_color_ramp;
     varying float v_speed;
     void main() {
-      if (v_speed < 0.3) discard;
+      if (v_speed < 2.0) discard;
       float t = clamp(v_speed / 40.0, 0.0, 1.0);
       vec4 c = texture2D(u_color_ramp, vec2(t, 0.5));
       gl_FragColor = vec4(c.rgb, 1.0);
