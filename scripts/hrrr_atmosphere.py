@@ -46,7 +46,10 @@ from urllib.request import urlopen, Request
 from urllib.error import URLError
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-NOMADS_PRS = "https://nomads.ncep.noaa.gov/cgi-bin/filter_hrrr_prs.pl"
+# NOMADS migrated from filter_hrrr_prs.pl to filter_hrrr_2d.pl circa early 2026.
+# The 2d filter serves both surface and pressure-level variables from wrfsfc files.
+# Source: NOMADS homepage (https://nomads.ncep.noaa.gov/), verified 2026-03-11.
+NOMADS_PRS = "https://nomads.ncep.noaa.gov/cgi-bin/filter_hrrr_2d.pl"
 
 # Grid definition: 0.25° CONUS
 GRID_W = 281   # -130 to -60 at 0.25° = 280 intervals + 1
@@ -77,7 +80,7 @@ def find_latest_hrrr_run():
         hour_str = run_time.strftime("%H")
         url = (
             f"{NOMADS_PRS}?dir=%2Fhrrr.{date_str}%2Fconus"
-            f"&file=hrrr.t{hour_str}z.wrfprsf00.grib2"
+            f"&file=hrrr.t{hour_str}z.wrfsfcf00.grib2"
             f"&var_TMP=on&lev_1000_mb=on"
         )
         try:
@@ -122,7 +125,7 @@ def nomads_prs_url(date_str, hour_str, variable, level_mb):
     level_name = LEVEL_NAMES[level_mb]
     return (
         f"{NOMADS_PRS}?dir=%2Fhrrr.{date_str}%2Fconus"
-        f"&file=hrrr.t{hour_str}z.wrfprsf00.grib2"
+        f"&file=hrrr.t{hour_str}z.wrfsfcf00.grib2"
         f"&var_{variable}=on&lev_{level_name}=on"
     )
 

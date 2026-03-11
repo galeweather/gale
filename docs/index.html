@@ -3578,7 +3578,7 @@
         // Build triangle strip ribbons for each streamline at altitude
         // 250mb ≈ 10,000m altitude (standard atmosphere)
         // Source: ICAO Standard Atmosphere, 250 hPa ≈ 10,363m
-        const ALTITUDE = 80000; // Exaggerated height to verify visibility — lower to ~10000 once confirmed
+        const ALTITUDE = 10000; // 250 hPa ≈ 10,363m (ICAO Standard Atmosphere)
         const verts = [];
 
         for (const line of streamlines) {
@@ -3593,7 +3593,7 @@
           // Compute ribbon width in Mercator space (~3km ribbon width)
           // Source: jet stream core width typically 100-400km (AMS Glossary),
           // 3km visual width for rendering clarity at map scale
-          const ribbonW = maplibregl.MercatorCoordinate.fromLngLat([0, 45], 0).meterInMercatorCoordinateUnits() * 30000;
+          const ribbonW = maplibregl.MercatorCoordinate.fromLngLat([0, 45], 0).meterInMercatorCoordinateUnits() * 8000;
 
           // Build triangle strip — two vertices per point (left/right of centerline)
           for (let i = 0; i < pts.length; i++) {
@@ -4238,7 +4238,6 @@
       }));
       const gl = map.painter.context.gl;
       jet3dLayer.implementation.updateGeometry(gl, streamlines);
-      console.log('Jet stream 3D: updated', streamlines.length, 'streamlines, verts:', jet3dLayer.implementation.vertCount);
     }
     if (map.getSource('jetstream-arrows')) {
       map.getSource('jetstream-arrows').setData({ type: 'FeatureCollection', features: arrowFeatures });
