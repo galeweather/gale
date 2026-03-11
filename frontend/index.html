@@ -4715,17 +4715,17 @@
         // Light returns higher (cirrus-like), heavy returns lower (cumulonimbus-like).
         let deckBase, deckThick;
         if (dbz < 20) {
-          deckBase = 22000 + rnd4 * 4000;
-          deckThick = 1500 + rnd1 * 1000;
+          deckBase = 55000 + rnd4 * 10000;
+          deckThick = 4000 + rnd1 * 3000;
         } else if (dbz < 35) {
-          deckBase = 18000 + rnd4 * 3000;
-          deckThick = 2000 + rnd1 * 1500;
+          deckBase = 45000 + rnd4 * 8000;
+          deckThick = 5000 + rnd1 * 3000;
         } else if (dbz < 50) {
-          deckBase = 15000 + rnd4 * 2000;
-          deckThick = 2500 + rnd1 * 1500;
+          deckBase = 38000 + rnd4 * 6000;
+          deckThick = 6000 + rnd1 * 4000;
         } else {
-          deckBase = 12000 + rnd4 * 2000;
-          deckThick = 3000 + rnd1 * 2000;
+          deckBase = 32000 + rnd4 * 5000;
+          deckThick = 7000 + rnd1 * 5000;
         }
         deckBase = Math.round(deckBase);
         const deckTop = Math.round(deckBase + deckThick);
