@@ -2024,7 +2024,7 @@
         }
       }
       gl_Position = u_matrix * vec4(pos, 0.0, 1.0);
-      gl_PointSize = 1.5;
+      gl_PointSize = clamp(1.0 + v_speed * 0.05, 1.0, 2.0);
     }`;
 
   const W_DRAW_FS = `
@@ -2033,9 +2033,11 @@
     varying float v_speed;
     void main() {
       if (v_speed < 1.5) discard;
+      vec2 pc = gl_PointCoord - 0.5;
+      if (dot(pc, pc) > 0.25) discard;
       float t = clamp(v_speed / 40.0, 0.0, 1.0);
       vec4 c = texture2D(u_color_ramp, vec2(t, 0.5));
-      gl_FragColor = vec4(c.rgb, 1.0);
+      gl_FragColor = vec4(c.rgb, c.a * 0.85);
     }`;
 
   const W_SCREEN_FS = `
