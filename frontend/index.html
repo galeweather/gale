@@ -2449,7 +2449,8 @@
       maxzoom: 15,
       encoding: 'terrarium'
     });
-    // Terrain enabled on demand via Tilt/3D view buttons (default is 2D flat)
+    // Terrain always on — visible when tilted, invisible when flat (0° pitch)
+    try { map.setTerrain({ source: 'dem', exaggeration: 1.5 }); } catch(e) {}
 
     // Temperature color wash — HRRR tiles from R2 (CONUS mask hides NODATA edges)
     map.addSource('temperature-tiles', {
@@ -4479,9 +4480,9 @@
 
   // ─── View Mode (3-state: 2D / Tilt / 3D) ──────
   const VIEW_MODES = [
-    { name: '2D', pitch: 0, terrain: false },
-    { name: 'Tilt', pitch: 45, terrain: true },
-    { name: '3D', pitch: 70, terrain: true }
+    { name: '2D', pitch: 0 },
+    { name: 'Tilt', pitch: 45 },
+    { name: '3D', pitch: 70 }
   ];
   let viewMode = 0; // default: 2D
   const viewToggleGroup = document.getElementById('viewToggleGroup');
@@ -4490,12 +4491,7 @@
   function setViewMode(mode) {
     viewMode = mode;
     const v = VIEW_MODES[viewMode];
-    // Disable terrain first for 2D, enable first for 3D modes
-    if (!v.terrain) {
-      map.setTerrain(null);
-    } else {
-      try { map.setTerrain({ source: 'dem', exaggeration: 1.5 }); } catch(e) {}
-    }
+    // Terrain always on — just change pitch. DEM loads on demand when tilted.
     const opts = { pitch: v.pitch, duration: 600 };
     if (mode === 0) opts.bearing = 0; // reset north for top-down
     map.easeTo(opts);
