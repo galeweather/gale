@@ -3579,7 +3579,9 @@
         // Build triangle strip ribbons for each streamline at altitude
         // 250mb ≈ 10,000m altitude (standard atmosphere)
         // Source: ICAO Standard Atmosphere, 250 hPa ≈ 10,363m
-        const ALTITUDE = 10000; // 250 hPa ≈ 10,363m (ICAO Standard Atmosphere)
+        // 250 hPa ≈ 10,363m true altitude (ICAO Standard Atmosphere).
+        // Exaggerated to 40km so elevation is visible when map is tilted.
+        const ALTITUDE = 40000;
         const verts = [];
 
         for (const line of streamlines) {
@@ -3594,7 +3596,7 @@
           // Compute ribbon width in Mercator space (~3km ribbon width)
           // Source: jet stream core width typically 100-400km (AMS Glossary),
           // 3km visual width for rendering clarity at map scale
-          const ribbonW = maplibregl.MercatorCoordinate.fromLngLat([0, 45], 0).meterInMercatorCoordinateUnits() * 8000;
+          const ribbonW = maplibregl.MercatorCoordinate.fromLngLat([0, 45], 0).meterInMercatorCoordinateUnits() * 3000;
 
           // Build triangle strip — two vertices per point (left/right of centerline)
           for (let i = 0; i < pts.length; i++) {
@@ -3613,31 +3615,31 @@
             const nx = -dy / len * ribbonW;
             const ny = dx / len * ribbonW;
 
-            // Speed-based width: wider for faster jet
-            const speedFactor = Math.min(2.5, Math.max(0.5, p.speed / 80));
+            // Speed-based width: subtle variation (0.7× at 60kt, 1.5× at 150kt)
+            const speedFactor = Math.min(1.5, Math.max(0.7, p.speed / 100));
 
             // Color: purple → pink → orange → gold based on speed
-            // Same ramp as the old flat layer
+            // Transparent so ground layers show through — jet stream is atmospheric overlay
             let r, g, b, a;
             const spd = p.speed;
             if (spd < 80) {
               const t = (spd - 60) / 20;
-              r = 0.58 + t * 0.07; g = 0.51 + t * 0.03; b = 1.0 - t * 0.02; a = 0.3 + t * 0.2;
+              r = 0.58 + t * 0.07; g = 0.51 + t * 0.03; b = 1.0 - t * 0.02; a = 0.10 + t * 0.08;
             } else if (spd < 100) {
               const t = (spd - 80) / 20;
-              r = 0.65 + t * 0.28; g = 0.55 - t * 0.27; b = 0.98 - t * 0.38; a = 0.5 + t * 0.1;
+              r = 0.65 + t * 0.28; g = 0.55 - t * 0.27; b = 0.98 - t * 0.38; a = 0.18 + t * 0.07;
             } else if (spd < 120) {
               const t = (spd - 100) / 20;
-              r = 0.93 + t * 0.05; g = 0.28 + t * 0.29; b = 0.60 - t * 0.37; a = 0.6 + t * 0.1;
+              r = 0.93 + t * 0.05; g = 0.28 + t * 0.29; b = 0.60 - t * 0.37; a = 0.25 + t * 0.07;
             } else {
               const t = Math.min(1, (spd - 120) / 30);
-              r = 0.98; g = 0.57 + t * 0.23; b = 0.23 - t * 0.15; a = 0.7 + t * 0.1;
+              r = 0.98; g = 0.57 + t * 0.23; b = 0.23 - t * 0.15; a = 0.32 + t * 0.08;
             }
 
             // Left vertex
-            verts.push(p.x + nx * speedFactor, p.y + ny * speedFactor, p.z, r, g, b, 1.0);
+            verts.push(p.x + nx * speedFactor, p.y + ny * speedFactor, p.z, r, g, b, a);
             // Right vertex
-            verts.push(p.x - nx * speedFactor, p.y - ny * speedFactor, p.z, r, g, b, 1.0);
+            verts.push(p.x - nx * speedFactor, p.y - ny * speedFactor, p.z, r, g, b, a);
           }
 
           // Degenerate triangle to separate strips
