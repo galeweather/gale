@@ -1979,17 +1979,12 @@
         }
       }
       float spd = length(wind);
-      // Alpha check: if both U/V had alpha (wind data exists), spd can be 0 but valid.
-      // If alpha failed (nodata), wind stays vec2(0) and spd=0 → respawn.
-      bool nodata = (wind.x == 0.0 && wind.y == 0.0);
       vec2 dir = spd > 0.001 ? wind / spd : vec2(0.0);
-      // Speed floor ensures even light wind creates visible drift for trail smear
-      float scaledSpd = clamp(sqrt(spd), 1.8, 3.5);
+      float scaledSpd = clamp(sqrt(spd), 0.8, 3.5);
       vec2 npos = pos + dir * scaledSpd * u_speed_factor;
-      // Only nodata → instant respawn. Low wind particles LIVE and drift.
-      float drop = nodata ? 1.0 : u_drop_rate + spd * u_drop_rate_bump;
+      float drop = spd < 0.5 ? 1.0 : u_drop_rate + spd * u_drop_rate_bump;
       vec2 seed = pos + u_rand_seed;
-      // Respawn within viewport (clamped to wind data bounds)
+      // Respawn clamped to intersection of viewport and wind data bounds
       vec2 rMin = max(u_view_min, u_wind_min);
       vec2 rMax = min(u_view_max, u_wind_max);
       vec2 respawn = vec2(
@@ -2011,7 +2006,6 @@
     uniform vec2 u_wind_max;
     uniform mat4 u_matrix;
     varying float v_speed;
-    varying float v_alpha;
     vec2 decode(vec4 c) { return vec2(c.r + c.g / 255.0, c.b + c.a / 255.0); }
     void main() {
       float y = floor(a_index / u_particles_res);
@@ -2020,11 +2014,9 @@
       vec2 pos = decode(texture2D(u_particles, uv));
       vec2 wuv = (pos - u_wind_min) / (u_wind_max - u_wind_min);
       v_speed = 0.0;
-      v_alpha = 0.0;
       if (wuv.x >= 0.0 && wuv.x <= 1.0 && wuv.y >= 0.0 && wuv.y <= 1.0) {
         vec4 uSamp = texture2D(u_wind_u, wuv);
         vec4 vSamp = texture2D(u_wind_v, wuv);
-        v_alpha = min(uSamp.a, vSamp.a);
         if (uSamp.a > 0.1 && vSamp.a > 0.1) {
           float u = uSamp.r * 80.0 - 40.0;
           float v = vSamp.r * 80.0 - 40.0;
@@ -2032,25 +2024,18 @@
         }
       }
       gl_Position = u_matrix * vec4(pos, 0.0, 1.0);
-      // Bigger point for slow wind → trail system creates visible smear
-      gl_PointSize = v_speed > 5.0 ? 1.5 : 2.5;
+      gl_PointSize = 1.5;
     }`;
 
   const W_DRAW_FS = `
     precision mediump float;
     uniform sampler2D u_color_ramp;
     varying float v_speed;
-    varying float v_alpha;
     void main() {
-      // Kill nodata particles (no wind tile coverage)
-      if (v_alpha < 0.1) discard;
-      // Very calm air (< 0.5 m/s) — still discard, not useful
-      if (v_speed < 0.5) discard;
+      if (v_speed < 1.5) discard;
       float t = clamp(v_speed / 40.0, 0.0, 1.0);
       vec4 c = texture2D(u_color_ramp, vec2(t, 0.5));
-      // Fade opacity for light wind — subtle smear, not bright dot
-      float opacity = smoothstep(0.5, 4.0, v_speed);
-      gl_FragColor = vec4(c.rgb, opacity);
+      gl_FragColor = vec4(c.rgb, 1.0);
     }`;
 
   const W_SCREEN_FS = `
@@ -2389,7 +2374,7 @@
         gl.uniform1i(gl.getUniformLocation(scProg, 'u_screen'), 0);
         // Shorter trails zoomed out (less bright), longer zoomed in (visible flow)
         const fadeLerp = Math.min(1, Math.max(0, (zoom - 3) / 7)); // 0 at z3, 1 at z10
-        const trailFade = 0.96 + fadeLerp * 0.03; // 0.96 at z3, 0.99 at z10 — longer trails
+        const trailFade = 0.95 + fadeLerp * 0.04; // 0.95 at z3, 0.99 at z10
         gl.uniform1f(gl.getUniformLocation(scProg, 'u_opacity'), trailFade);
         gl.uniform1f(gl.getUniformLocation(scProg, 'u_floor'), 0.0);
         drawQuad(gl, scProg);
@@ -2420,9 +2405,8 @@
         gl.disableVertexAttribArray(aIdx);
 
         // Pass 4: Composite onto MapLibre's framebuffer
-        // Particles are a CONUS/regional feature — fade in z3-5, fade out z6-8
-        // Gradient-placed wind arrows take over at zoomed-in scales
-        const fadeIn = Math.min(1, Math.max(0, (zoom - 3) / 2));    // 0 at z3, 1 at z5
+        // Particles visible at state/regional scale, fade out when zoomed in
+        const fadeIn = Math.min(1, Math.max(0, (zoom - 3) / 3));    // 0 at z3, 1 at z6
         const fadeOut = Math.min(1, Math.max(0, (8 - zoom) / 2));   // 1 at z6, 0 at z8
         const zoomOpacity = 0.55 * fadeIn * fadeOut;
         gl.bindFramebuffer(gl.FRAMEBUFFER, prevFBO);
