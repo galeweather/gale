@@ -4713,20 +4713,25 @@
         // ── Cloud deck altitude ──
         // Exaggerated to ~20km so clouds are clearly visible above terrain when tilted.
         // Light returns higher (cirrus-like), heavy returns lower (cumulonimbus-like).
-        // Clouds always below jet stream (40km). Cap at 35km.
+        // Real cloud altitudes × 4 exaggeration for map visibility.
+        // Source: WMO International Cloud Atlas (cloudatlas.wmo.int)
+        // Light returns → high clouds (cirrus ~8-12km × 4 = 32-48km)
+        // Medium → mid clouds (altostratus ~3-6km × 4 = 12-24km)
+        // Heavy → low/towering (cumulus/Cb ~1-6km × 4 = 4-24km, tops to 18km × 4 = 72km)
+        // Jet stream at 40km (10km × 4). Tall storms will naturally punch through.
         let deckBase, deckThick;
         if (dbz < 20) {
-          deckBase = 28000 + rnd4 * 6000;
-          deckThick = 1500 + rnd1 * 1000;
+          deckBase = 32000 + rnd4 * 16000;
+          deckThick = 2000 + rnd1 * 2000;
         } else if (dbz < 35) {
-          deckBase = 24000 + rnd4 * 5000;
-          deckThick = 2000 + rnd1 * 1500;
+          deckBase = 12000 + rnd4 * 12000;
+          deckThick = 4000 + rnd1 * 4000;
         } else if (dbz < 50) {
-          deckBase = 20000 + rnd4 * 4000;
-          deckThick = 2500 + rnd1 * 1500;
+          deckBase = 4000 + rnd4 * 8000;
+          deckThick = 8000 + rnd1 * 12000;
         } else {
-          deckBase = 18000 + rnd4 * 3000;
-          deckThick = 3000 + rnd1 * 2000;
+          deckBase = 4000 + rnd4 * 4000;
+          deckThick = 16000 + rnd1 * 56000;
         }
         deckBase = Math.round(deckBase);
         const deckTop = Math.round(deckBase + deckThick);
