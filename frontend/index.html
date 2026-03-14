@@ -2046,7 +2046,7 @@
       if (v_speed < 1.5) discard;
       float t = clamp(v_speed / 40.0, 0.0, 1.0);
       vec4 c = texture2D(u_color_ramp, vec2(t, 0.5));
-      gl_FragColor = vec4(c.rgb, c.1.0);
+      gl_FragColor = vec4(c.rgb, 1.0);
     }`;
 
   const W_SCREEN_FS = `
