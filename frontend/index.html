@@ -2283,9 +2283,9 @@
 
       render(gl, matrix) {
         if (!layers.wind || !windLoaded || !upProg) return;
-        // Skip particles at z7+ — streamlines take over
+        // Skip particles at z5+ — streamlines take over (direction visible earlier)
         const renderZoom = mapR ? mapR.getZoom() : 4;
-        if (renderZoom >= 7) { mapR.triggerRepaint(); return; }
+        if (renderZoom >= 5) { mapR.triggerRepaint(); return; }
         resizeScreen(gl);
 
         // Save MapLibre GL state
@@ -2406,7 +2406,7 @@
     };
   }
 
-  // ─── Wind Streamline System (Canvas 2D, z7+) ─────────────────
+  // ─── Wind Streamline System (Canvas 2D, z5+) ─────────────────
   function initStreamlines() {
     const canvas = document.createElement('canvas');
     canvas.id = 'streamline-canvas';
@@ -2556,7 +2556,7 @@
         return;
       }
       const zoom = map.getZoom();
-      if (zoom < 7) {
+      if (zoom < 5) {
         canvas.style.display = 'none';
         animFrame = requestAnimationFrame(update);
         return;
@@ -3151,7 +3151,7 @@
     windParticleLayer = createWindParticleLayer();
     map.addLayer(windParticleLayer, 'temp-labels-layer');
 
-    // Wind streamlines (Canvas 2D overlay, activates at z7+)
+    // Wind streamlines (Canvas 2D overlay, activates at z5+)
     windStreamlines = initStreamlines();
     windStreamlines.start();
 
