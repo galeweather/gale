@@ -5410,8 +5410,9 @@
         (pos) => {
           const lng = pos.coords.longitude;
           const lat = pos.coords.latitude;
-          map.flyTo({ center: [lng, lat], zoom: 8, duration: 1500 });
+          map.flyTo({ center: [lng, lat], zoom: 11, duration: 1200 });
           setUserLocationMarker(lng, lat);
+          setClickMarker(lng, lat);
           saveRecentLocation('My Location', lat, lng);
           closeSearch();
           map.once('moveend', () => {
