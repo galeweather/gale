@@ -4627,14 +4627,17 @@
     south = Math.max(south, 22); north = Math.min(north, 52);
     if (west >= east || south >= north) return;
 
-    // Larger cells = overlapping discs that merge into continuous cloud deck
-    const CELL_DEG = 0.04;
+    // Adaptive cell size — larger cells at lower zoom for wider coverage
+    const zoom = map.getZoom();
+    if (zoom < 2) return;
+    const z = Math.min(Math.floor(zoom), 6);
+    // At z4 (default view): 0.16° cells → manageable count over CONUS
+    // At z6+: 0.04° cells → detailed cloud shapes when zoomed in
+    const CELL_DEG = zoom < 5 ? 0.16 : zoom < 6 ? 0.08 : 0.04;
     const COLS = Math.ceil((east - west) / CELL_DEG);
     const ROWS = Math.ceil((north - south) / CELL_DEG);
-    const MAX_CELLS = 5000;
+    const MAX_CELLS = 6000;
     if (COLS * ROWS > MAX_CELLS) return;
-    const z = Math.min(Math.floor(map.getZoom()), 6);
-    if (z < 2) return;
 
     const sliderVal = parseInt(timeSlider.value);
     const isFuture = sliderVal > 10;
@@ -4762,11 +4765,42 @@
           return [cLng + Math.cos(a) * cloudRLng * w, cLat + Math.sin(a) * cloudRLat * w];
         });
 
+        // Main cloud body
         cloudFeatures.push({
           type: 'Feature',
           geometry: { type: 'Polygon', coordinates: [coords] },
           properties: { color: cloudColor, height: deckTop, base: deckBase }
         });
+
+        // Soft edge bubbles — small lobes around the perimeter to break hard edges
+        // 4-6 bubbles per cloud, offset outward from the main body
+        const bubbleCount = 4 + (h & 3); // 4-7 bubbles
+        for (let bi = 0; bi < bubbleCount; bi++) {
+          const bHash = ((h + bi * 1640531527) >>> 0);
+          const bAngle = ((bHash & 0xFFF) / 0xFFF) * Math.PI * 2;
+          const bDist = 0.65 + ((bHash >> 12) & 0xFF) / 255 * 0.35; // 65-100% of radius
+          const bSize = 0.25 + ((bHash >> 20) & 0xFF) / 255 * 0.30; // 25-55% of main radius
+          const bLng = cLng + Math.cos(bAngle) * cloudRLng * bDist;
+          const bLat = cLat + Math.sin(bAngle) * cloudRLat * bDist;
+          const bRLng = cloudRLng * bSize;
+          const bRLat = cloudRLat * bSize;
+          // Small 12-vertex circle for each bubble
+          const bCoords = [];
+          for (let v = 0; v <= 12; v++) {
+            const ba = (v / 12) * Math.PI * 2;
+            const bvh = ((bHash + v * 2654435761) >>> 0) & 0xFF;
+            const bw = 1.0 + (bvh / 255 - 0.5) * 0.2;
+            bCoords.push([bLng + Math.cos(ba) * bRLng * bw, bLat + Math.sin(ba) * bRLat * bw]);
+          }
+          // Bubble altitude: slightly varied from main cloud for organic look
+          const bBaseOff = ((bHash >> 4) & 0xFF) / 255 * deckThick * 0.3;
+          const bTopOff = ((bHash >> 8) & 0xFF) / 255 * deckThick * 0.2;
+          cloudFeatures.push({
+            type: 'Feature',
+            geometry: { type: 'Polygon', coordinates: [bCoords] },
+            properties: { color: cloudColor, height: deckTop - bTopOff, base: deckBase + bBaseOff }
+          });
+        }
       }
 
       // ── Single uniform cloud layer ──
@@ -5927,8 +5961,8 @@
   // ─── Load Atmosphere on Startup ────────────
   map.on('load', () => {
     loadAtmosphereProfile();
-    // Initial elevated radar (wait for tiles to load)
-    setTimeout(updateElevatedRadar, 2000);
+    // Initial elevated radar (short delay for radar tiles to start loading)
+    setTimeout(updateElevatedRadar, 500);
   });
 
   // ─── Help Overlay ──────────────────────────
