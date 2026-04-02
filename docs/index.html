@@ -1305,6 +1305,107 @@
     height: 100%;
     border-radius: 2px;
   }
+
+  /* ═══════════════════════════════════════════
+     WEATHER SUMMARY BANNER
+     ═══════════════════════════════════════════ */
+  .summary-banner {
+    position: fixed;
+    top: 72px;
+    left: 16px;
+    z-index: 99;
+    pointer-events: auto;
+    max-width: 420px;
+    width: calc(100% - 32px);
+  }
+  .summary-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    background: var(--bg-panel);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius);
+    cursor: pointer;
+    box-shadow: var(--shadow-md);
+    transition: border-color var(--transition);
+    user-select: none;
+  }
+  .summary-header:hover {
+    border-color: var(--border-active);
+  }
+  .summary-header svg {
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+    color: var(--accent);
+  }
+  .summary-title {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--text-primary);
+    white-space: nowrap;
+  }
+  .summary-chevron {
+    margin-left: auto;
+    width: 14px;
+    height: 14px;
+    color: var(--text-muted);
+    transition: transform var(--transition);
+    flex-shrink: 0;
+  }
+  .summary-banner.open .summary-chevron {
+    transform: rotate(180deg);
+  }
+  .summary-body {
+    display: none;
+    margin-top: 6px;
+    padding: 16px 18px;
+    background: var(--bg-panel);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-lg);
+    max-height: 50vh;
+    overflow-y: auto;
+  }
+  .summary-banner.open .summary-body {
+    display: block;
+  }
+  .summary-text {
+    font-size: 13px;
+    line-height: 1.65;
+    color: var(--text-secondary);
+  }
+  .summary-text p {
+    margin-bottom: 12px;
+  }
+  .summary-text p:last-child {
+    margin-bottom: 0;
+  }
+  .summary-meta {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-subtle);
+    font-size: 10px;
+    font-family: var(--mono);
+    color: var(--text-muted);
+  }
+  .summary-loading {
+    color: var(--text-muted);
+    font-size: 12px;
+    font-style: italic;
+  }
+
+  @media (max-width: 640px) {
+    .summary-banner {
+      top: 62px;
+      left: 10px;
+      max-width: calc(100% - 20px);
+    }
+  }
 </style>
 </head>
 <body>
@@ -1372,6 +1473,28 @@
       <polyline points="2 12 12 17 22 12"/>
     </svg>
   </button>
+</div>
+
+<!-- ════════════════════════════════════════════
+     4-DAY WEATHER SUMMARY
+     ════════════════════════════════════════════ -->
+<div class="summary-banner" id="summaryBanner" style="display:none">
+  <div class="summary-header" id="summaryToggle" role="button" tabindex="0" aria-expanded="false" aria-controls="summaryBody">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41m11.32-11.32l1.41-1.41"/>
+      <circle cx="12" cy="12" r="5"/>
+    </svg>
+    <span class="summary-title">4-Day Weather Summary — Twin Cities</span>
+    <svg class="summary-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <polyline points="6 9 12 15 18 9"/>
+    </svg>
+  </div>
+  <div class="summary-body" id="summaryBody" role="region" aria-label="4-day weather summary">
+    <div class="summary-text" id="summaryText">
+      <p class="summary-loading">Loading forecast...</p>
+    </div>
+    <div class="summary-meta" id="summaryMeta"></div>
+  </div>
 </div>
 
 <!-- ════════════════════════════════════════════
@@ -6008,6 +6131,49 @@
     }
   });
 
+})();
+
+// ═══════════════════════════════════════════
+// 4-DAY WEATHER SUMMARY (Twin Cities)
+// Source: NWS MPX gridpoint → Haiku summary, generated every 6h via GitHub Actions
+// Stored on R2 at summary/forecast.json
+// ═══════════════════════════════════════════
+(function() {
+  const SUMMARY_URL = 'https://pub-9975b1cfcbf9480f9e1333c7e208a6ce.r2.dev/summary/forecast.json';
+  const banner = document.getElementById('summaryBanner');
+  const toggle = document.getElementById('summaryToggle');
+  const textEl = document.getElementById('summaryText');
+  const metaEl = document.getElementById('summaryMeta');
+
+  // Toggle open/close
+  toggle.addEventListener('click', () => {
+    banner.classList.toggle('open');
+    toggle.setAttribute('aria-expanded', banner.classList.contains('open'));
+  });
+  toggle.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle.click(); }
+  });
+
+  // Fetch summary from R2
+  fetch(SUMMARY_URL + '?_=' + Date.now())
+    .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(data => {
+      // Convert plain text paragraphs to HTML
+      const paragraphs = data.summary.split(/\n\n+/).filter(Boolean);
+      textEl.innerHTML = paragraphs.map(p => '<p>' + p.replace(/\n/g, ' ') + '</p>').join('');
+
+      // Show generation time
+      const genDate = new Date(data.generated_at);
+      const ago = Math.round((Date.now() - genDate.getTime()) / 60000);
+      const agoText = ago < 60 ? ago + ' min ago' : Math.round(ago / 60) + 'h ago';
+      metaEl.textContent = 'Updated ' + agoText + ' · Source: NWS Minneapolis (MPX)';
+
+      banner.style.display = '';
+    })
+    .catch(() => {
+      // Silently hide banner if no summary available yet
+      banner.style.display = 'none';
+    });
 })();
 </script>
 </body>
