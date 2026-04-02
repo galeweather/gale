@@ -5520,10 +5520,6 @@
     if (playing) {
       playBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="3" width="4" height="18"/><rect x="15" y="3" width="4" height="18"/></svg>';
 
-      // Prefetch first batch of forecast tiles before starting playback
-      prefetchedHours.clear();
-      prefetchForecastTiles(0, 6);
-
       let frame = parseFloat(timeSlider.value);
       let lastTime = performance.now();
       // Speeds: past radar = 1 step/400ms, future forecast = 1 step/120ms
@@ -6163,6 +6159,8 @@
     loadAtmosphereProfile();
     // Initial elevated radar (short delay for radar tiles to start loading)
     setTimeout(updateElevatedRadar, 500);
+    // Prefetch forecast tiles into browser cache immediately so play is instant
+    setTimeout(() => prefetchForecastTiles(0, 6), 2000);
   });
 
   // ─── Help Overlay ──────────────────────────
