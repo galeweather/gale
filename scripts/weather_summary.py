@@ -55,6 +55,8 @@ Style rules:
 - Keep it under 250 words
 - Do NOT start with "Good morning" or any time-of-day greeting (this is displayed all day)
 - Do NOT use emojis
+- Do NOT use markdown headers, bold, or any formatting — plain text only
+- Jump straight into the forecast, no title line
 
 Here is the NWS forecast data:
 

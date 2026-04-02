@@ -6158,8 +6158,9 @@
   fetch(SUMMARY_URL + '?_=' + Date.now())
     .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
     .then(data => {
-      // Convert plain text paragraphs to HTML
-      const paragraphs = data.summary.split(/\n\n+/).filter(Boolean);
+      // Convert plain text paragraphs to HTML (strip any markdown headers that slip through)
+      const clean = data.summary.replace(/^#+\s+.*\n*/gm, '').trim();
+      const paragraphs = clean.split(/\n\n+/).filter(Boolean);
       textEl.innerHTML = paragraphs.map(p => '<p>' + p.replace(/\n/g, ' ') + '</p>').join('');
 
       // Show generation time
