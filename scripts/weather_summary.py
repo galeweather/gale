@@ -81,6 +81,17 @@ Here is the NWS forecast data:
     with urllib.request.urlopen(req, timeout=60) as resp:
         result = json.loads(resp.read())
 
+    try:
+        import importlib.util as _il, os as _os
+        _s = _il.spec_from_file_location("cost_hook", _os.path.expanduser("~/Documents/Assistant/cost_hook.py"))
+        _ch = _il.module_from_spec(_s); _s.loader.exec_module(_ch)
+        u = result.get("usage", {})
+        _ch.log("GALE", "claude-haiku-4-5-20251001",
+                u.get("input_tokens", 0), u.get("output_tokens", 0),
+                service="weather_summary")
+    except Exception:
+        pass
+
     return result["content"][0]["text"]
 
 # ── Main ─────────────────────────────────────────────────────────
