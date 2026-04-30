@@ -16,7 +16,10 @@ jobs:
 
       - name: Generate weather summary
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GATEWAY_URL: https://llm.fulldigitaltwin.com/v1/messages
+          GATEWAY_KEY_ID: worker-gale
+          VK: vk-gale
+          GATEWAY_HMAC_SECRET: ${{ secrets.GATEWAY_HMAC_SECRET }}
         run: python3 scripts/weather_summary.py
 
       - name: Upload summary to R2

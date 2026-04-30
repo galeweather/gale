@@ -9,6 +9,7 @@ Source: https://api.weather.gov/points/44.9778,-93.2650
 """
 
 import json, os, sys, urllib.request, datetime
+from gateway_client import signed_post, GatewayError
 
 # ── NWS forecast for Twin Cities ──────────────────────────────────
 NWS_FORECAST_URL = "https://api.weather.gov/gridpoints/MPX/107,71/forecast"
@@ -31,12 +32,18 @@ def build_forecast_text(periods):
                      f"{p['detailedForecast']}")
     return "\n".join(lines)
 
-# ── Haiku summary generation ─────────────────────────────────────
+# ── Summary generation via the LLM gateway ───────────────────────
+# Routed through https://llm.fulldigitaltwin.com/v1/messages (HMAC-signed).
+# Tier policy max-first => Max plan first, Ollama fallback. No direct
+# Anthropic-API dependency in this script anymore. Cost tracking is handled
+# gateway-side; no inline cost_hook needed here.
 def generate_summary(forecast_text):
-    """Call Claude Haiku to write a charismatic weather summary."""
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        print("ERROR: ANTHROPIC_API_KEY not set", file=sys.stderr)
+    gateway_url = os.environ.get("GATEWAY_URL", "https://llm.fulldigitaltwin.com/v1/messages")
+    vk = os.environ.get("VK", "vk-gale")
+    key_id = os.environ.get("GATEWAY_KEY_ID", "worker-gale")
+    secret_hex = os.environ.get("GATEWAY_HMAC_SECRET")
+    if not secret_hex:
+        print("ERROR: GATEWAY_HMAC_SECRET not set", file=sys.stderr)
         sys.exit(1)
 
     prompt = f"""You are a charismatic, knowledgeable TV weatherperson delivering the 4-day forecast for the Twin Cities metro area in Minnesota. You have real personality — think a mix of confident and warm, someone people tune in for.
@@ -62,35 +69,21 @@ Here is the NWS forecast data:
 
 {forecast_text}"""
 
-    body = json.dumps({
-        "model": "claude-haiku-4-5-20251001",
-        "max_tokens": 400,
-        "messages": [{"role": "user", "content": prompt}]
-    }).encode()
-
-    req = urllib.request.Request(
-        "https://api.anthropic.com/v1/messages",
-        data=body,
-        headers={
-            "x-api-key": api_key,
-            "anthropic-version": "2023-06-01",
-            "content-type": "application/json"
-        }
-    )
-
-    with urllib.request.urlopen(req, timeout=60) as resp:
-        result = json.loads(resp.read())
-
     try:
-        import importlib.util as _il, os as _os
-        _s = _il.spec_from_file_location("cost_hook", _os.path.expanduser("~/Documents/Assistant/cost_hook.py"))
-        _ch = _il.module_from_spec(_s); _s.loader.exec_module(_ch)
-        u = result.get("usage", {})
-        _ch.log("GALE", "claude-haiku-4-5-20251001",
-                u.get("input_tokens", 0), u.get("output_tokens", 0),
-                service="weather_summary")
-    except Exception:
-        pass
+        result = signed_post(
+            gateway_url,
+            {
+                "max_tokens": 400,
+                "messages": [{"role": "user", "content": prompt}],
+            },
+            virtual_key=vk,
+            key_id=key_id,
+            secret_hex=secret_hex,
+            timeout=120,
+        )
+    except GatewayError as e:
+        print(f"ERROR: gateway {e.status} {e.code}: {e.message}", file=sys.stderr)
+        sys.exit(1)
 
     return result["content"][0]["text"]
 
