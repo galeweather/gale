@@ -1,5 +1,5 @@
 // Gale Service Worker — tile caching + offline support
-const CACHE = 'gale-tiles-v2';
+const CACHE = 'gale-tiles-v3';
 const R2 = 'pub-9975b1cfcbf9480f9e1333c7e208a6ce.r2.dev';
 
 self.addEventListener('install', () => self.skipWaiting());
@@ -16,8 +16,11 @@ self.addEventListener('fetch', (event) => {
   const cleanUrl = event.request.url.split('?')[0];
   const cacheReq = new Request(cleanUrl);
 
-  if (cleanUrl.endsWith('metadata.json')) {
-    // Network-first for metadata (need freshness info)
+  if (cleanUrl.endsWith('.json')) {
+    // Network-first for ALL json (metadata.json freshness AND summary/forecast.json).
+    // BUG FIX: forecast.json previously fell through to the cache-first tile path
+    // below, so it was pinned to whatever was cached on first visit — users saw
+    // days-old 4-day forecasts even though R2 was fresh. JSON = always revalidate.
     event.respondWith(
       fetch(event.request)
         .then(resp => {
