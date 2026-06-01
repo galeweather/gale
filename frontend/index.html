@@ -1928,8 +1928,9 @@
     for (let h = startHour; h < Math.min(19, startHour + count); h++) {
       if (prefetchedHours.has(h)) continue;
       prefetchedHours.add(h);
-      const layers = [tempTilePath(h), precipTilePath(Math.max(1, h))];
-      for (const layer of layers) {
+      // Include WIND (was temp+precip only) so wind futurecast playback is smooth too.
+      const tileLayers = [tempTilePath(h), precipTilePath(Math.max(1, h)), windTilePath(h)];
+      for (const layer of tileLayers) {
         for (const t of tiles) {
           prefetchQueue.push(`${TILE_BASE}/${layer}/${t.z}/${t.x}/${t.y}.png`);
         }
@@ -1955,6 +1956,31 @@
       if (inflight === 0) prefetching = false;
     }
     next();
+  }
+
+  // Warm all radar animation frames for the visible viewport so the first
+  // play-loop is smooth instead of stalling as each mesonet frame loads on
+  // demand. Reuses the throttled prefetch queue. (Radar is mesonet, not R2, so
+  // the service worker doesn't cache it — this warms the browser HTTP cache.)
+  function prefetchRadarFrames() {
+    if (typeof radarProducts === 'undefined' || !map.getBounds) return;
+    const z = Math.min(7, Math.round(map.getZoom()));
+    const bounds = map.getBounds();
+    const tiles = [];
+    for (let tz = Math.max(3, z - 1); tz <= z; tz++) {
+      const n = Math.pow(2, tz);
+      const xMin = Math.max(0, Math.floor((bounds.getWest() + 180) / 360 * n));
+      const xMax = Math.min(n - 1, Math.floor((bounds.getEast() + 180) / 360 * n));
+      const yMin = Math.max(0, Math.floor((1 - Math.log(Math.tan(bounds.getNorth() * Math.PI / 180) + 1 / Math.cos(bounds.getNorth() * Math.PI / 180)) / Math.PI) / 2 * n));
+      const yMax = Math.min(n - 1, Math.floor((1 - Math.log(Math.tan(bounds.getSouth() * Math.PI / 180) + 1 / Math.cos(bounds.getSouth() * Math.PI / 180)) / Math.PI) / 2 * n));
+      for (let x = xMin; x <= xMax; x++)
+        for (let y = yMin; y <= yMax; y++)
+          tiles.push({ z: tz, x, y });
+    }
+    for (const product of radarProducts)
+      for (const t of tiles)
+        prefetchQueue.push(`https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/${product}/${t.z}/${t.x}/${t.y}.png`);
+    drainPrefetch();
   }
 
   function updateForecastSources() {
@@ -3806,18 +3832,21 @@
             // Transparent so ground layers show through — jet stream is atmospheric overlay
             let r, g, b, a;
             const spd = p.speed;
+            // Alpha raised 2026-05-31 — jet was too faint to see (max was 0.28,
+            // low end 0.10≈invisible). Lifted ~2× at low speed, ~+65% at high;
+            // still translucent so ground layers show through.
             if (spd < 80) {
               const t = (spd - 60) / 20;
-              r = 0.58 + t * 0.07; g = 0.51 + t * 0.03; b = 1.0 - t * 0.02; a = 0.10 + t * 0.08;
+              r = 0.58 + t * 0.07; g = 0.51 + t * 0.03; b = 1.0 - t * 0.02; a = 0.20 + t * 0.12;
             } else if (spd < 100) {
               const t = (spd - 80) / 20;
-              r = 0.65 + t * 0.28; g = 0.55 - t * 0.27; b = 0.98 - t * 0.38; a = 0.18 + t * 0.04;
+              r = 0.65 + t * 0.28; g = 0.55 - t * 0.27; b = 0.98 - t * 0.38; a = 0.32 + t * 0.06;
             } else if (spd < 120) {
               const t = (spd - 100) / 20;
-              r = 0.93 + t * 0.05; g = 0.28 + t * 0.29; b = 0.60 - t * 0.37; a = 0.22 + t * 0.03;
+              r = 0.93 + t * 0.05; g = 0.28 + t * 0.29; b = 0.60 - t * 0.37; a = 0.40 + t * 0.04;
             } else {
               const t = Math.min(1, (spd - 120) / 30);
-              r = 0.98; g = 0.57 + t * 0.23; b = 0.23 - t * 0.15; a = 0.25 + t * 0.03;
+              r = 0.98; g = 0.57 + t * 0.23; b = 0.23 - t * 0.15; a = 0.44 + t * 0.04;
             }
 
             // Left vertex
@@ -5635,23 +5664,52 @@
   }
 
   function doLocate() {
-    if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const lng = pos.coords.longitude;
-          const lat = pos.coords.latitude;
-          map.flyTo({ center: [lng, lat], zoom: 11, duration: 1200 });
-          setUserLocationMarker(lng, lat);
-          setClickMarker(lng, lat);
-          saveRecentLocation('My Location', lat, lng);
-          closeSearch();
-          map.once('moveend', () => {
-            map.fire('click', { lngLat: { lng, lat }, point: map.project([lng, lat]), originalEvent: new MouseEvent('click') });
-          });
-        },
-        () => console.warn('Location access denied')
-      );
+    if (!('geolocation' in navigator)) {
+      announce('Geolocation is not supported by this browser.');
+      return;
     }
+    const origTitle = locateBtn.getAttribute('title') || 'My location';
+    // Visible "working" state — without this (and without a timeout) the button
+    // looked dead while a slow GPS fix hung indefinitely.
+    locateBtn.disabled = true;
+    locateBtn.style.opacity = '0.5';
+    locateBtn.setAttribute('title', 'Locating…');
+    const restore = () => {
+      locateBtn.disabled = false;
+      locateBtn.style.opacity = '';
+      locateBtn.setAttribute('title', origTitle);
+    };
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        restore();
+        const lng = pos.coords.longitude;
+        const lat = pos.coords.latitude;
+        map.flyTo({ center: [lng, lat], zoom: 11, duration: 1200 });
+        setUserLocationMarker(lng, lat);
+        setClickMarker(lng, lat);
+        saveRecentLocation('My Location', lat, lng);
+        closeSearch();
+        map.once('moveend', () => {
+          map.fire('click', { lngLat: { lng, lat }, point: map.project([lng, lat]), originalEvent: new MouseEvent('click') });
+        });
+      },
+      (err) => {
+        // Distinct, VISIBLE feedback instead of a silent console.warn.
+        locateBtn.disabled = false;
+        locateBtn.style.opacity = '';
+        const msg = err && err.code === 1
+          ? 'Location access denied — enable it in your browser/site settings.'
+          : err && err.code === 3
+          ? 'Location timed out — try again.'
+          : 'Location unavailable right now — try again.';
+        announce(msg);
+        locateBtn.style.color = '#ff6b6b';
+        locateBtn.setAttribute('title', msg);
+        setTimeout(() => { locateBtn.style.color = ''; locateBtn.setAttribute('title', origTitle); }, 4000);
+      },
+      // The real fix: bounded timeout so a slow fix fails fast instead of hanging.
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    );
   }
 
   locateBtn.addEventListener('click', doLocate);
@@ -6159,8 +6217,12 @@
     loadAtmosphereProfile();
     // Initial elevated radar (short delay for radar tiles to start loading)
     setTimeout(updateElevatedRadar, 500);
-    // Prefetch forecast tiles into browser cache immediately so play is instant
-    setTimeout(() => prefetchForecastTiles(0, 6), 2000);
+    // Preload the WHOLE 18h forecast (temp+precip+wind) for the viewport so
+    // futurecast playback is smooth, not jumpy. Throttled to 4 concurrent in
+    // drainPrefetch, so it warms quietly in the background.
+    setTimeout(() => prefetchForecastTiles(0, 18), 2000);
+    // Warm all radar animation frames for the viewport so the first loop is smooth.
+    setTimeout(prefetchRadarFrames, 2500);
   });
 
   // ─── Help Overlay ──────────────────────────
